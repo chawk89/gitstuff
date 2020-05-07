@@ -1,0 +1,166 @@
+---
+title: "Assignment 4: Question 1"
+output:
+     html_document
+---
+
+## Importing R objects from script _a la_ python
+
+__1.__ (5 points) Write an `import_from` function that allows us to
+selectively import data and functions in an R script. For example,
+consider a file `my_script.R` containing
+
+```{r, eval = FALSE}
+my_data  <- 1:3
+f  <- function(a) a + 1
+g  <- function(b) 2 * b + my_data  ## my_data is 1:3 above
+h  <- function(x) g(f(x))
+```
+
+In an R session, the above code will yield the following.
+```{r, eval = FALSE}
+> g(4)
+[1]  9 10 11
+> h(2)
+[1] 7 8 9
+```
+
+We would like to be able to import only `f` and `h` from `myfns.R`
+into the current session. Here's a prototype for your function to fill
+out.  Hint: Useful functions are `base::missing`, `base::source`---be
+sure to read the documentation well!---`base::assign`, `base::get`,
+`base::parent.env`, `base::invisible`.
+
+```{r}
+#' Import a list of objects (fns, data, any R object) from an R script file into current session
+#' @param file syntactically correct R source file name
+#' @param the list of object names to import as character vectors
+#'     (everything, if omitted, in which case the third argument is
+#'     ignored)
+#' @param where the environment where to import into; default is the
+#'     calling environment
+#' @return TRUE invisibly if all goes well or fail if objects not found in file
+
+
+
+##clear session
+rm(list=ls())
+
+##import function
+import_from  <- function(file, obj_names, where) {
+  if(missing(obj_names)){
+     where = NULL
+    ##then ignore the third argument as in instructions
+  }  
+  if(missing(where)){
+    where = base::parent.env(environment())
+  } else {
+    where = new.env()
+  }
+    source(file = "my_script.R", local = TRUE, keep.source = FALSE)
+  
+    ## current execution environment
+    ce <- environment() 
+    ##print("This is the current environment and its objects: ")
+    ##print(ce)
+    
+    pe <- base::parent.env(ce) 
+    ##print("This is the parent environment and its objects: ")
+    ##print(pe)
+    ##print(ls(pe))
+    
+    ##ne <- new.env()
+    for(i in 1:length(obj_names)){
+    assign(obj_names[i], value = base::get(obj_names[i]), envir = where)
+    ##print("environment inside for loop")
+    ##print(obj_names[i])
+    ##print(where)
+      
+     
+    }
+    
+    ##print("This is the new environment and its objects: ")
+    ##print(where)
+    ##print(ls(where))
+
+   
+    invisible(TRUE)
+}
+
+
+
+
+
+
+
+```
+
+Your code will be tested as follows. These tests are sufficient for
+you to get full credit.
+
+## Testing
+
+We will test using `my_script.R`, included here.
+
+### 1. List current objects
+
+```{r, eval = FALSE}
+rm("f","h")
+ls()  ## make sure you have no f and h
+```
+
+### 2. Do the import
+
+Check that only the above two objects are imported.
+
+```{r, eval = FALSE}
+import_from("my_script.R", c("f", "h"))
+ls() ## Now f and h should be there
+
+
+```
+
+
+### 3. Test that it works. 
+
+```{r, eval = FALSE}
+## Test h
+h(2)  ## should yield 7 8 9
+
+```
+
+```{r, eval = FALSE}
+## Test f
+f(20) ## should yield 21
+```
+
+```{r, eval = FALSE, error = TRUE}
+## Test g; should throw an error!
+g(4)
+
+
+
+```
+
+### 4. Test that it is safe
+
+Note that the `my_data` in `my_script.R` is _safe_: using `my_data` in
+the global session will not alter the behavior of `h` (and also f)
+which will still yield the same result as before.
+
+```{r, eval = FALSE}
+> my_data <- 17
+> h(2)
+[1] 7 8 9
+> f(20)
+[1] 21
+```
+
+## 5. Test that error is thrown if unknown object is imported
+
+```{r, eval = FALSE}
+> import_from("my_script.R", c("f", "w"))
+Error in get(x = obj, envir = e) : object 'w' not found
+>
+```
+

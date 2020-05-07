@@ -1,0 +1,316 @@
+---
+title: 17.4. R6 Classes
+output: slidy_presentation
+---
+
+```{r, eval = TRUE, echo = FALSE}
+installIfNeeded <- function(packages, ...) {
+    toInstall <- setdiff(packages, installed.packages()[, 1])
+    if (length(toInstall) > 0) {
+        install.packages(toInstall, ...)
+    }
+}
+installIfNeeded(c("ggplot2", "R6"), repos = "https://cloud.r-project.org")
+```
+
+`R6` is a newer package by Winston Chang that lets you do
+standard-style OOP. We define a class with private fields `symbol` and
+`data` and accessor and modifier functions.
+
+I find that the main advantages of this package are:
+
+1. It feels familiar to those who are coming to R from other OOP
+   languages.
+2. Simplicity. It is very easy to use and has therefore become quite
+   popular 
+3. Documentation. The documentation is sufficiently detailed for
+novice users to get going
+
+___
+
+## 17.4.1. Class Definition
+
+We will again continue with the same stock example.
+
+```{r}
+library(R6)
+Stock <- R6Class("Stock",
+                 private = list(symbol = NA,
+                                data = NA),
+                 public = list(
+                     initialize = function(symbol, data) {
+                         private$symbol <- symbol
+                         private$data <- data
+                     },
+                     getSymbol = function() private$symbol,
+                     setSymbol = function(symbol) private$symbol <- symbol,
+                     getData = function() private$data,
+                     setData = function(data) private$data <- data
+                 )
+                 )
+```
+
+This makes `Stock` an _object generator_ function. 
+
+__Note__ To avoid problems, I suggest using the same name for both the
+class and the generator function. For example, `Stock` above.
+
+Also, note the use of `<-` rather than `<<-` in the `initialize`,
+`setSymbol` and `setData` methods. 
+
+The above class definition contains:
+
+- Private fields. We can also have private methods, only visible to
+  the class and its subclasses, but we don't have private methods here
+
+- Public methods. We can also have public fields, but we don't define
+  them for this class
+
+- Initialization routine, the constructor if you wish.
+
+___
+
+Private fields (and methods) are accessed using the `private$`
+construct within the class definition. They are not accessible outside
+the class construction code except via public methods you expose.
+
+Inside the class definition, you can refer to the public methods of
+the object using the `self$` construct. We'll see examples below.
+
+___
+
+
+Here's how we would use the stock `R6` class.
+
+```{r}
+s = Stock$new(symbol = "JUNK",
+              data = data.frame(price = rnorm(10, mean = 100, sd = 5),
+                                date = as.Date(Sys.Date()) - 1:10))
+s
+```
+___
+
+
+## 17.4.2. Print method
+
+Maybe you want a better method for printing: you can define your own
+and maybe even have defaults. While we're at it, let's also define the
+validator method since we are providing field modifiers.
+
+```{r}
+Stock <- R6Class("Stock",
+                 private = list(symbol = NA,
+                                data = NA,
+                                valid = function(symbol, data) {
+                                    if (!is.data.frame(data)) {
+                                        return(FALSE)
+                                    }
+                                    dfNames <- sort(names(data))
+                                    expectedNames <- c("date", "price")
+                                    if (length(expectedNames) != length(dfNames) ||
+                                        !all.equal(expectedNames, dfNames)) {
+                                        return(FALSE)
+                                    }
+                                    if ((!is.character(symbol)) || (length(symbol) != 1L) ||
+                                        (nchar(symbol) == 0)) {
+                                        return(FALSE)
+                                        
+                                    }
+                                    TRUE
+                                }),
+                 public = list(
+                     initialize = function(symbol = "JUNK",
+                                           data = data.frame(price = rnorm(10, mean = 100, sd = 5),
+                                                             date = as.Date(Sys.Date()) - 1:10)) {
+                         if (!private$valid(symbol, data)) {
+                             stop("Bad input values")
+                         }
+                         private$symbol <- symbol
+                         private$data <- data
+                     },
+                     print = function() {
+                         ## Have to use private$ for even our own private stuff
+                         cat(sprintf("Stock Symbol: %s\n", private$symbol))
+                         ## Have to use self$ for public stuff
+                         str(self$getData())
+                     },
+                     getSymbol = function() private$symbol,
+                     setSymbol = function(symbol) {
+                         if (!private$valid(symbol, private$data)) {
+                             stop("Bad symbol!")
+                         }
+                         private$symbol <- symbol
+                     },
+                     getData = function() private$data,
+                     setData = function(data) {
+                         if (!private$valid(private$symbol, data)) {
+                             stop("Bad data!")
+                         }
+                         private$data <- data
+                     }
+                 )
+                 )
+```
+
+___
+
+
+Let's give this a shot.
+
+```{r}
+s2 <- Stock$new()
+s2
+```
+
+Note how you have to use `private$` for every private fields and
+function and `self$` for public fields and functions.  This is the
+safe way if you will be using `R6` and extending objects across
+packages since it ensures portability.  For details, I refer you to
+the `R6` vignettes.
+
+___
+
+
+__NOTE__ _A common mistake when learning about `R6` is using `<-`
+where `=` is expected!_ As an example, consider the following.
+
+```{r, error = TRUE}
+foo  <- R6Class("foo",
+                private = list(x = NA),
+                public = list(setX <- function(val) private$x <- val,
+                              getX = function() private$x)
+                )
+```
+
+results in this cryptic error message because we made a mistake using
+`setX <- function(val) ...` rather than `setX = function(val)
+...`. The message says that `setX` should be a name!
+
+
+___
+
+## 17.4.3. Plotting
+
+Let us define a plot method as we did before for the S4 class using `ggplot2::qplot`.
+Unlike _Reference Classes_, `R6` does not allow you to add fields or methods. So you have
+to define things ab initio.
+
+```{r}
+Stock <- R6Class("Stock",
+                 private = list(symbol = NA,
+                                data = NA,
+                                valid = function(symbol, data) {
+                                    if (!is.data.frame(data) || nrow(data) < 2) {
+                                        return(FALSE)
+                                    }
+                                    dfNames <- sort(names(data))
+                                    expectedNames <- c("date", "price")
+                                    if (length(expectedNames) != length(dfNames) ||
+                                        !all.equal(expectedNames, dfNames)) {
+                                        return(FALSE)
+                                    }
+
+                                    if (length(symbol) == 0 || nchar(symbol) == 0) {
+                                        return(FALSE)
+                                    }
+                                    TRUE
+                                }),
+                 public = list(
+                     initialize = function(symbol = "JUNK",
+                                           data = data.frame(price = rnorm(10, mean = 100, sd = 5),
+                                                             date = as.Date(Sys.Date()) - 1:10)) {
+                         if (!private$valid(symbol, data)) {
+                             stop("Bad input values")
+                         }
+                         private$symbol <- symbol
+                         private$data <- data
+                     },
+                     print = function() {
+                         ## Have to use private$ for even our own private stuff
+                         cat(sprintf("Stock Symbol: %s\n", private$symbol))
+                         ## Have to use self$ for public stuff
+                         str(self$getData())
+                     },
+                     getSymbol = function() private$symbol,
+                     setSymbol = function(symbol) {
+                         if (!private$valid(symbol, private$data)) {
+                             stop("Bad symbol!")
+                         }
+                         private$symbol <- symbol
+                     },
+                     getData = function() private$data,
+                     setData = function(data) {
+                         if (!private$valid(private$symbol, data)) {
+                             stop("Bad data!")
+                         }
+                         private$data <- data
+                     },
+                     plot = function() {
+                         data <- private$data
+                         ggplot2::qplot(data$date, data$price, data = data, geom = "line")
+                     })
+                 )
+```
+
+___
+
+Let's try it.
+
+```{r}
+s3 <- Stock$new()
+s3
+s3$plot()
+```
+
+## 17.4.4. Saving and loading `R6` objects
+
+`R6` objects can be saved and loaded just like any other R object.
+
+```{r, eval = FALSE}
+save(s3, file="foo.rda")
+```
+
+Later in a new R session, you can load it back. Below I loading the
+same `s3` object I saved before.
+
+```{r, eval = FALSE}
+load("foo.rda")
+> s3
+<environment: 0x7f9de21509c8>
+attr(,"class")
+[1] "Stock" "R6"
+```
+
+___
+
+## 17.4.6. Using `R6` in packages.
+
+It is important to document `R6` objects you create
+properly. Otherwise they are useless. 
+
+I have included an example package utilizing the stock R6 example for
+you. 
+
+Let's examine that a bit 
+
+## 17.4.7. References
+
+`R6` allows for inheritance, active bindings, etc., and this is best
+described in the vignettes for `R6`. You can also have finalizers for
+objects. Please refer to the vignettes.
+
+
+For example, in my package [`ASSISTant`](https://github.com/bnaras/ASSISTant),
+I use inheritance to define only those methods that differ between different
+types of design. (See the file `ASSISTDesigns.R` for details.)
+
+There are many other packages you can look at via the _reverse
+depends_ of the `R6` package.
+
+## 17.4.8. Session Info
+
+```{r}
+sessionInfo()
+```
+
+

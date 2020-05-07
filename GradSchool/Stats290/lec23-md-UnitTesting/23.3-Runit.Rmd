@@ -1,0 +1,143 @@
+---
+title: 23.3. `RUnit` Testing
+output:
+     slidy_presentation
+---
+
+__NOTE__ I provide this merely for completeness, so that others who
+come from a Java world may find it easy to recognize the testing
+framework. I highly recommend `testthat`.
+
+___
+
+`RUnit` provides a simple mechanism for testing output of R
+expressions. Example from vignette. Consider
+
+```{r}
+library(RUnit)
+c2f <- function(c) return(9/5 * c + 32)
+```
+
+A corresponding test function could look like this:
+
+```{r}
+test.c2f <- function() {
+  checkEquals(c2f(0), 32, " Checking 0C = 32F")
+  checkEquals(c2f(10), 50, " Checking 10C = 50F")
+  checkException(c2f("xx"), " Checking exception with non numeric arg")
+}
+```
+
+The default naming convention for test functions is `test.` as in
+`JUnit` which is the inspiration for `RUnit`.
+
+___
+
+One normally creates a suite of such tests in a file and runs
+them. The function `defineTestSuite` helps.
+
+```{r}
+testsuite.c2f <- defineTestSuite(name = "c2f",
+                                 dirs = file.path(path.package(package="RUnit"), "examples"),
+                                 testFileRegexp = "^runit.+\\.R",
+                                 testFuncRegexp = "^test.+",
+                                 rngKind = "Marsaglia-Multicarry",
+                                 rngNormalKind = "Kinderman-Ramage")
+```
+Then all you do is run the test suite:
+
+```{r}
+testResult <- runTestSuite(testsuite.c2f)
+printTextProtocol(testResult)
+```
+
+You can also run a single file:
+
+```{r, eval = FALSE}
+runTestFile(file.path(system.file(package="RUnit"),
+                      "examples/runitc2f.r"))
+```
+___
+
+###  23.3.1.1 `RUnit` equality checks
+
+What kinds of equality checks are available in `RUnit`?
+
+```{r, eval=FALSE}
+checkEquals(target, current, msg, tolerance = .Machine$double.eps^0.5,mcheckNames = TRUE, ...)
+checkEqualsNumeric(target, current, msg, tolerance = .Machine$double.eps^0.5, ...)
+checkIdentical(target, current, msg)
+checkTrue(expr, msg)
+checkException(expr, msg, silent = getOption("RUnit")$silent)
+```
+
+___
+
+### 23.3.2. Example use in `sp23Design`
+
+A fairly involved package for group sequential seamless Phase II-III
+Clinical trials. Include interim looks, a number of parameters etc.
+
+```{r, eval=FALSE}
+###################################################
+### code chunk number 38: Case-A-unit-test
+###################################################
+test.caseA <- function() {
+  trialParameters <- list(minimumNumberOfEvents = 20,
+                          minimumIncreaseInV = 0.2,
+                          numberRecruitedEachYear = c(80, 120, 160, 160),
+                          followupTime = 3,
+                          adminCensoringTime = 7,
+                          interimLookTime = c(1, 2, 3, 5, 7),
+                          type1ErrorForResponse = 0.05,
+                          type2ErrorForResponse = 0.01,
+                          glrBoundarySidedness = "one", # one sided or two-sided
+                          type1Error = 0.05,
+                          type2Error = 0.10,
+                          epsType1 = 1/3,
+                          epsType2 = 1/3)
+  trueParameters <- list(p0 = 0.3,
+                         p1 = 0.3,
+                         pdiffHyp=0.3,
+                         theta = list(
+                           alpha = 0,
+                           beta = 0,
+                           gamma = 0),
+                         baselineLambda = 0.35,
+                         etaHyp = 0.25)
+  rngSeed <- 9872831
+  sp23Design <- generateSP23Design(trueParameters, trialParameters)
+  trialHistory <- exploreSP23Design(sp23Design, numberOfSimulations=25, rngSeed=rngSeed)
+
+  result <- analyzeSP23Design(sp23Design, trialHistory)$designSummary
+
+  checkEquals(result[["numberOfTimesH0RIsRejectedAtFirstLook"]], 0)
+  checkEquals(result[["numberOfTimesH0RIsRejected"]], 0)
+  checkEquals(result[["numberOfTimesStoppedForFutility"]], 25)
+  checkEquals(result[["numberOfTimesH0SIsAccepted"]], 0)
+  checkEquals(result[["numberOfTimesH0SIsRejected"]], 0)
+  checkEquals(result[["numberOfTimesFutilityDecidedAtLastLook"]], 0)
+  checkEquals(result[["numberOfTimesTrialEndedAtLook"]],
+  {
+      out <- c(9, 13, 3, 0, 0)
+      names(out) <- trialParameters$interimLookTime;
+      out}
+  )
+}
+```
+
+___
+
+### 23.3.3. `RUnit` summary
+
+`RUnit` does not directly integrate with the `R CMD check` mechanism.
+The package `svUnit` was written to address this and other
+issues. It also produces nicer summaries for use in web pages etc.
+
+___
+
+## Session Info
+
+```{r}
+sessionInfo()
+```

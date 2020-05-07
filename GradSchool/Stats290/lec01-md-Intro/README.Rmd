@@ -1,0 +1,28 @@
+---
+title: "Read Me First"
+author: "Balasubramanian Narasimhan"
+output:
+  html_document: default
+---
+
+# Notes
+
+1. You will not be able to run `demo.R` since it requires you to have
+   both the data and the package installed. It is only included here
+   for completeness. 
+   
+2. The files with extension `.Rmd` are R markdown files. These files
+   mix code and text and are therefore ideal for class. You can open
+   any R markdown file in Rstudio and click on the `Knit to HTML`
+   button to produce the html file. 
+   
+3. The first time you `Knit...` any R markdown provided in this class,
+   it could take a bit of time because pre-requisites may have to be
+   downloaded and installed. This is done only once!
+   
+4. All R markdowns are set up to be knit in the directory that
+   contains them. This is because they contains references to included
+   figure files etc., relative to the markdown file location. Rstudio
+   offers an easy way to change the working directory of your R
+   Session via the `Session -> Set Working Directory` menu item.
+   

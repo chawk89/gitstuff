@@ -1,0 +1,159 @@
+---
+title: "27.4 Cluster Computing"
+output:
+      slidy_presentation
+---
+
+So far, our computing has been on a single machine, with multiple
+cores. But more general configurations are possible.
+
+A cluster set up is useful for running the same R code in parallel on
+different machines, perhaps using different arguments as parameters.
+
+A cluster has two basic types of nodes (servers).
+
+- A head node where jobs are submitted and managed
+- A bunch of compute nodes where the actual work takes place
+- All of them see the same storage so same data is visible to
+    every node. (In an amazon cluster for example, you will most
+    likely use S3 the elastic net storage, that is mounted on all your
+    nodes.)
+- Jobs are submitted using shell scripts. The shell scripts
+    contain directives on job requirements (working directory, number
+    of cores needed, amount of memory etc.)
+- A job scheduler schedules these jobs based on priorities, load
+    etc. (Sun grid Engine, Open grid engine, SLURM, etc).
+- Results get written to files which you can then process.
+
+
+Most cluster setups I know of are Unix-based and so you cannot avoid
+Unixy things.
+
+You'll probably prototype stuff on your local machine and then try it
+on a cluster setup.
+
+## 27.4.1. Stanford Farmshare
+
+This is a generic cluster courtesy of Stanford ITSS folks. See
+the [farmshare page]](https://farmshare.stanford.edu). The `corn`
+machines are part of farmshare.
+
+- First time setup is required. Takes 2 min.
+- Need a fully sponsored Stanford Sunet Id.
+- R installed.
+- Some packages behind latest versions. Also, can set up your own
+packae.
+- Choose between various versions of R using `module` command
+
+_There are hogs on the farm and so don't bother either me or TAs about
+    not getting your job on._
+
+## 27.4.2. A job submission script
+
+Computational jobs on a cluster are typically submitted using a shell
+script, called _job scripts_. Here is an example job script, say
+`prog.sh`, for farmshare.
+
+```{bash, eval = FALSE}
+#!/bin/bash
+#SBATCH --mail-type=ALL
+#SBATCH --nodes=1
+#SBATCH --time=00:05:00
+#SBATCH --mem=1024
+#SBATCH --job-name=job1
+#SBATCH --output=job1.out
+#SBATCH --error=job1.err
+#SBATCH --workdir=/home/users/job1_dir
+
+#now run normal batch commands
+module load R/3.4.0
+./prog1.R
+```
+
+- Line 1 (`#!/bin/bash`) tells us that this is a `bash` script
+- Line 2 says: send all email regarding this job (by default to your
+  Stanford mail) This is on job queued, job begun, job started, job
+  ended etc.
+- Line 3 says I need a whole node for the job.
+- Line 4 says I will use 5 minutes for the job
+- Line 5 says I will need 1G of memory for the job
+- Lines 6 to 8 specify job names, output files and error files
+- Line 9 specified the working directory: every file or directory you
+access is relative to it unless it is an absolute path
+- The `module` lines means _load a version of R_ for use. Much
+software, and many versions of a single software are available. So
+here you specify your requirements. However, other cluster sites may
+not use `modules`, so beware.
+- The last line actually runs the R code in `prog1.R` provided it is
+  there. Here we are assuming it is using `Rscript` described
+  earlier. 
+
+As you can see, the shell has its own programming language and we will
+be using the `bash` shell in all our examples.
+
+## 27.4.3. Job submission
+
+You submit jobs via: `sbatch job.sh` or equivalent on SLURM for example.
+
+Different cluster installations might use different schedulers. Two
+common ones are:
+
+- Sun Grid Engine or Open Grid Engine. This used to be used 
+    by farmshare, proclus on campus, but now everything is `SLURM`.
+
+- SLURM. This is used by the [sherlock](https://sherlock.stanford.edu)
+  cluster.
+
+There is similarity between the two although the command names
+differ. We'll just look at the basic process.
+
+Jobs are submitted using `qsub` on the Sun/Open grid
+engine. You can view the status of your job via `qhost`.
+
+On SLURM, the equivalent commands are `sbatch` or `srun` and
+`qstat`.
+
+
+## 27.4.4. Some Terminology
+
+__Process__ An instance of a computer program that is being
+    sequentially executed by a computer system that has the ability
+    to run several computer programs concurrently
+
+__Fork__ A process can fork meaning it creates a copy of itself,
+    which is called a _child_ process. The original process is then
+    called the _parent_ process. The fork operation creates a
+    separate address space for the child. The child process has an
+    exact copy of all the memory segments of the parent process. Both
+    the parent and child possess the same code but execute
+    independently.
+
+__Thread__ A fork of a computer program into two or more
+    concurrently running tasks. The implementation of threads and
+    processes differs from one operating system to another, but in
+    most cases, a thread is contained inside a process. Multiple
+    threads can exist within the same process and share resources such
+    as memory, while different processes do not share this data.
+
+__Shared Memory__is memory that may be simultaneously accessed
+    by multiple programs with an intent to provide communication among
+    them or avoid redundant copies. Using memory for communication
+    inside a single program, for example among its multiple threads,
+    is generally not referred to as shared memory.
+
+__Single Process, Multiple Data__  A single process is run with
+    different data sets
+
+__Multiple Instruction, Multiple data__  Different processes are
+	run with different data sets.
+
+
+## 27.4.5. Some Resources
+
+- Parallel R, O'Reilly book, available online from Stanford
+    Libraries. Dated, but still useful
+- State of the Art in Parallel Computing with R, by Schmidberger
+    et. al. in Journal of Statistical Software ( also a bit dated now)
+- High Performance Computing Task View CRAN
+- R Blogs (search for parallel)
+- [My Github repo](https://github.com/bnaras/sherlock_cluster)

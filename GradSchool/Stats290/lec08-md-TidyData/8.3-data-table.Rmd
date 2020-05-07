@@ -1,0 +1,404 @@
+---
+title: "8.3. The  `data.table` Package"
+output:
+     slidy_presentation
+---
+
+```{r, echo = FALSE, results = 'hide', message = FALSE}
+## Install a package if not already installed
+installIfNeeded <- function(packages, ...) {
+    toInstall <- packages[!(packages %in% installed.packages()[, 1])]
+    if (length(toInstall) > 0) {
+        install.packages(toInstall, repos = "https://cloud.r-project.org")
+    }
+}
+
+## Ensure packages exist and activate them
+needPackages <- function(packages) {
+    installIfNeeded(packages)
+    for (x in packages) {
+        library(x, character.only = TRUE)
+    }
+}
+needPackages(c("tidyverse", "data.table"))
+set.seed(12334)
+```
+
+The package `data.table` facilitates aggregation/summarization of
+large data _in memory_. 
+
+__NOTE__ To take full advantage of data frame's multi-threaded
+capabilities, you actually have to compile R in a specific way (at
+least on MacOS). So don't worry if you get a warning about `openmp`
+for now.
+
+It provides for SQL-like operations on `data.table` objects which
+behave like `data.frames`, except with far, far, better performance.
+
+```{r}
+data(mtcars)
+class(mtcars)
+```
+
+Convert data frames to data table using `data.table` or
+`as.data.table`.
+
+```{r}
+mtcarsDT <- data.table(mtcars)
+mtcarsDT[
+         mpg > 20,                             ## the i part
+         .(AvgHP = mean(hp),                   ## the j part
+           "MinWT(kg)" = min(wt * 453.6)),     ## 1000 lbs = 453.6 Kg
+         by = .(cyl, under5gears = gear < 5)   ## the group by part
+         ]
+```
+
+## 8.3.1. Basic Idea
+
+Data table operations can be thought to have three components: `i`,
+`j`, `by` corresponding to `where`, `select` and `group by` inspired
+by SQL.
+
+-------     ------ ----------   ---------
+    R         i        j          by
+  SQL       where    select     group by
+
+
+So `DT[i, j, by]` means: take `DT`, subset rows using `i`, then
+calculate `j` grouped by `by`.
+
+In `data.table` character vectors are best used as is for efficiency.
+
+## 8.3.2. Compare and Contrast with data frames
+
+```{r}
+d <- data.frame(x = letters[1:5], y = 1:5, z = TRUE)
+str(d)
+```
+
+with
+
+```{r}
+DT <- data.table(x = letters[1:5], y = 1:5, z = TRUE)
+str(DT)
+```
+
+```{r, error = TRUE}
+## data frame does not allow the next statement
+d[3:5]
+## data.table does, where the 3:5 becomes the "i"
+DT[3:5]
+## The next two are similar
+d[3:5, ]
+DT[3:5, ]
+## The last row of DT
+DT[.N]
+```
+
+The special variable `.N` refers to the number of rows (in a specific
+context).
+
+## 8.3.3. Selecting columns in `j`
+
+
+```{r}
+DT <- data.table(A = 1:5, B = letters[1:5], C = 6:10)
+DT[, B]
+```
+
+_Note how the returned value is a vector, not another data table (as
+with tibbles)._ To force it to be a data table, use the `list`
+construct `.()`.
+
+
+```{r}
+DT[, .(B, C)]
+DT[, .(Total = sum(A), Mean = mean(C))]
+DT[, .(B, C = sum(C))]
+```
+
+The construct `.()` is an alias for `list()`, therefore you can stick
+in arbitary expressions.  These will be evaluated in the context of
+the data table variables, so no need to qualify with `$`.
+
+Note how the fact that `data.table` does not return a `data.table` as
+a result (when a list construct is not used) can be exploited for side effects.
+
+```{r}
+DT[, plot(A, C)]
+```
+
+## 8.3.4. Grouping
+
+Compute some grouped statistics.
+
+```{r}
+DT <- data.table(x = sample(letters[1:5], 10, replace = TRUE), y = 1:10)
+DT
+```
+
+```{r}
+DT[, .(sumY = sum(y), meanY = mean(y)), by = .(x)]
+```
+
+The grouping preserves the order in which the groups are seen. Also,
+the group is returned first, followed by the quantities
+computed. Other columns are dropped.
+
+Suppose, for the sum and mean example,  we also want the count of how many in each group.
+
+```{r}
+DT[, .(sumY = sum(y), meanY = mean(y), count = .N), by = .(x)]
+```
+
+Here `.N` refers to the number in the subset, the context!
+
+Beware of recycling:
+
+```{r}
+DT[, .(cumsumY = cumsum(y), meanY = mean(y)), by = .(x)]
+```
+
+The grouping can be done by arbitrary functions.
+
+```{r}
+DT[, .(sumY = sum(y), meanY = mean(y), count = .N), by = .( belowD = x < 'd')]
+```
+
+Here is another example with the `iris` dataset.
+
+```{r}
+str(iris)
+```
+
+Suppose we want medians by species.
+
+```{r}
+DT <- as.data.table(iris)
+DT[, .(Sepal.length = median(Sepal.Length),
+       Sepal.Width = median(Sepal.Width),
+       Petal.length = median(Petal.Length),
+       Petal.Width = median(Petal.Width)),
+   by = Species]
+```
+
+To sort in decreasing order of `Species`, use _chaining_.
+
+```{r}
+DT[, .(Sepal.length = median(Sepal.Length),
+       Sepal.Width = median(Sepal.Width),
+       Petal.length = median(Petal.Length),
+       Petal.Width = median(Petal.Width)),
+   by = Species][order(-Species)]
+```
+
+This is equivalent to:
+
+```{r}
+tmp <- DT[, .(Sepal.length = median(Sepal.Length),
+              Sepal.Width = median(Sepal.Width),
+              Petal.length = median(Petal.Length),
+              Petal.Width = median(Petal.Width)),
+          by = Species]
+tmp[i = order(-Species)]
+```
+
+Chaining is the process of doing two or more things in _one_
+statement. The advantage of this is that optimizations may be
+performed before the task is actually executed.
+
+___
+
+Note that the following is incorrect for sorting in decreasing order
+of `Species`.
+
+
+```{r}
+DT[, .(Sepal.length = median(Sepal.Length),
+       Sepal.Width = median(Sepal.Width),
+       Petal.length = median(Petal.Length),
+       Petal.Width = median(Petal.Width)),
+   by = Species[order(Species, decreasing=TRUE)]]
+```
+
+Why??
+
+Because that is equivalent to:
+
+```{r}
+tmp <-  DT[, j = Species[order(Species, decreasing = TRUE)]]
+
+DT[, .(Sepal.length = median(Sepal.Length),
+       Sepal.Width = median(Sepal.Width),
+       Petal.length = median(Petal.Length),
+       Petal.Width = median(Petal.Width)),
+   by = tmp]
+```
+
+## 8.3.5. Adding/Dropping Columns
+
+You can add and drop columns (by reference) using the `:=` function.
+
+```{r}
+DT <- data.table(A = c(rep('a', 3), rep('b', 2)), B = 1:5)
+DT[, C := B + 1]
+DT
+DT[, `:=`(D = 2 * B, E = 2 * B + 1)]
+DT[, `:=`(D = NULL, E=NULL)]
+```
+
+This is a very efficient and quick way of creating columns on the
+fly. Also, since this is done by reference, it is very efficient.
+
+To examine this, let us see what happens when we do the same
+operations on a standard data frame or even a `tibble`, when we create
+a new column or drop it.
+
+### First data frame.
+
+```{r}
+DF <- data.frame(A = c(rep('a', 3), rep('b', 2)), B = 1:5, stringsAsFactors = FALSE)
+data.table::address(DF)
+DF$C <- DF$B + 1
+str(DF)
+data.table::address(DF)
+DF$C <- NULL
+str(DF)
+data.table::address(DF)
+```
+
+_The address changed, which means things get copied_. 
+
+### Then `tibble`.
+
+```{r}
+library(tibble)
+TB <- as_tibble(DF)
+str(TB)
+data.table::address(TB)
+TB$C <- TB$B + 1
+str(TB)
+data.table::address(TB)
+TB$C <- NULL
+str(TB)
+data.table::address(TB)
+```
+
+### Now `data.table`.
+
+```{r}
+DT <- as.data.table(DF)
+str(DT)
+data.table::address(DT)
+```
+
+As an aside, note that the next statement below is not what we want.
+
+```{r}
+DT[, .(C = B + 1)]
+str(DT)
+```
+It returns a result we don't seek.
+
+So let us create the `C` column, _in place._
+
+```{r}
+data.table::address(DT)
+DT[, `:=`(C = B + 1)]
+str(DT)
+data.table::address(DT)
+```
+
+We remove it.
+
+```{r}
+DT[, C := NULL]
+str(DT)
+data.table::address(DT)
+```
+
+No change to the memory address.
+
+## 8.3.6. Keys
+
+You can set keys on columns to make grouping operations faster.  The
+indexing is done on the fly.
+
+```{r}
+DT <- data.table(A = c("c", "b", "a", "c", "b", "a"),
+                 B = c(4, 1, 6, 3, 5, 2),
+                 C = 1:6)
+setkey(DT, A, B)
+DT
+```
+
+You can then do things like
+
+- Give me rows that match the key pair `A = "b"` and `B = 5`.
+
+```{r}
+DT[.("b", 5)]
+```
+
+- Give me rows that match the key value `A = "b"`
+```{r}
+DT[.("b")]
+```
+
+- Give me rows that match the key pair `A = "b"` and `B = 6`.
+```{r}
+DT[.("b", 6)]
+```
+
+- Problematic result for key value not in data: give me rows that match the key pair `A = "b"` and `B = 7`.
+```{r}
+DT[.("b", 7)]
+```
+
+The latter two examples can cause problems of program correctness, so
+I suggest using
+
+```{r}
+DT[.("b", 7), nomatch=0]
+```
+
+Keying (or indexing) speeds up computations on large datasets
+significantly.
+
+## 8.3.7 Miscellaneous
+
+There are number of special variables such as `.SD` and `.SDcols` that
+can be exploited for computations. Briefly, `.SD` stands for _subset
+of data_ and is the subset obtained by some grouping operation.  You
+can exploit that fact with the `.()` construct in `j` to do arbitrary
+things.
+
+The package also provides a fast function for reading data files
+called `fread`.  Note, however, that it does not do the hand-holding
+that functions in `readr` do. 
+
+In summary, I used `data.table` for efficiency with large data
+sets. You should certainly consider `data.table` for large data sets.
+I recommend that you use _named arguments_ wherever possible, in data
+table invocations to improve readability.
+
+In the next class, I will discuss `dtplyr` a `dplyr` front-end to
+`data.table`. 
+
+## 8.3.8. References
+
+Read more in help for `data.table` and also the vignettes.
+
+```{r, eval = FALSE}
+vignette(package = "data.table")
+```
+
+will list them as well as a faq. Also see stackoverflow for common
+questions on `data.table`.
+
+
+## 8.3.9. Session Info
+
+```{r}
+sessionInfo()
+```

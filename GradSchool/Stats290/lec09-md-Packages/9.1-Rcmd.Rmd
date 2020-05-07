@@ -1,0 +1,181 @@
+---
+title: "9.1. R Command Line Tools"
+output:
+     slidy_presentation
+---
+
+To become an expert R developer, you need to master some of the R
+command line tools.  Packages like `devtools` have made development
+much, much easier, and I recommend them. However, there is no excuse
+for an R expert not to understand how things really work.
+
+Note: I am doing these in bash shell on my Mac named `karna`. For
+example, below, I typed `R --help` at a terminal prompt.
+
+```{bash}
+R --help
+```
+
+---
+
+## 9.1.1. Details
+
+The above output indicates what R can do besides just plain running
+your code interactively.
+
+- You can ask R for help on various command options
+- You can choose to change the startup behavior of `R` by means of a
+  profile file.
+- You can execute an R expression at the shell prompt:
+```{bash}
+R --silent --vanilla -e '1+2'
+```
+- You can execute commands in a file using the `-f` or `--file`
+  option. This is now much better done by means of `Rscript` as we
+  shall see later.
+- You can _COMPILE_ R files. (This produces byte-code for an R virtual
+  machine giving you some better performance.)
+- You can _INSTALL_ and _REMOVE_ R packages from your installation.
+- You can _build_ R add on packages. This produces a `.tar.gz` file.
+- You can _check_ R add on packages.
+- You can profile (_Rprof_) R code.
+- You can get information (_config_) on the configuration that was
+used to build R.
+- You can modify memory configuration. (If you do this for this class,
+you're almost surely doing something wrong.)
+- You can get information as to where R is installed (_RHOME_).
+- You can build and link dynamic libraries using C/C++/Fortran code
+using the compiler tool chain that was used to build R.
+- You can invoke a low-level debugger to debug code.
+- Etc. etc.
+
+___
+
+## 9.1.2. What C compiler built my installed version of R?
+
+```{bash}
+R CMD config CC
+```
+
+___
+
+## 9.1.3. What C compile flags were used?
+
+And what were the options used for the C Compiler?
+
+```{bash}
+R CMD config CFLAGS
+```
+
+___
+
+## 9.1.4. What C compile flags were used?
+
+What about C++?
+
+```{bash}
+R CMD config CXX
+```
+
+And the C++ compiler flags?
+
+```{bash}
+R CMD config CXXFLAGS
+```
+
+___
+
+## 9.1.5. What C compile flags were used?
+
+Java???
+
+```{bash}
+R CMD config JAVAC
+```
+
+Note that java is not essential for R and therefore, if you install a
+JDK (Java Development Kit) and or update your alternatives, you have
+to issue the command to configure R appropriately for your Java
+Software Development Kit (SDK).  (Important for packages like `rJava`
+etc.)
+
+```{bash, eval = FALSE}
+R CMD javareconf
+```
+
+___
+
+## 9.1.6. Why do previous details matter?
+
+- Most people install R using a pre-built binary. When you develop
+  your own packages, you need to ensure that you don't conflict with
+  assumptions of your pre-built R binary. For example, if your R
+  binary was built with compiler X, and you have a package that has
+  C++ code and you use another compiler Y. Then you may encounter
+  subtle (and not so subtle!) errors.
+
+  R helps you out by telling you: _Hey, here is the tool chain I was
+  built with. If you use it, then you're most likely home._
+
+- Sometimes, since R packages on CRAN are built on a server farm,
+  there is a delay between when a package is available in source form
+  and when it is available in binary form. You may have to build the
+  package from sources. 
+  
+  Same, if you want to install non-CRAN packages on Github.
+    
+- Some packages need external tools, like `rJava` that may not be
+  installed everywhere. So R makes no assumptions about its
+  existence. However, if you do install such optional tools, such as a
+  Java SDK, then these tools can help you inform R about them, so that
+  it can be customized for your computer.
+
+- R lets you interrogate itself. For example, where is R installed?
+```{bash}
+R RHOME
+```
+Such facilities are useful when you are writing advanced shell scripts
+making use of R.
+
+
+## 9.1.7. Development Environment
+
+Per assigment 0, you have all have installed the tool chain needed for
+a decent R programming and development environment.
+
+These are all available from the CRAN page. Be sure to refer to
+[FAQs for windows and Macs](https://cran.rstudio.com/faqs.html) for
+help.
+
+A very useful page is the RStudio page on
+[R Package Development Prerequisites](https://support.rstudio.com/hc/en-us/articles/200486498-Package-Development-Prerequisites).
+
+
+### MacOS
+
+MacOS requires installation of
+[Xcode](https://developer.apple.com/xcode/) along with the command
+line tools via `xcode --select`.
+
+For TeX/LaTeX, we recommend a full installation of
+[MacTeX](https://tug.org/mactex/).
+
+
+### Windows
+
+Windows requires the installation of the
+[RTools](https://cloud.r-project.org/bin/windows/Rtools/) package
+provided by CRAN. On Windows, it is important to ensure that paths are
+set up correctly; so make sure you accept the defaults suggested by
+`RTools`.
+
+### Ubuntu/Debian
+
+If you are reading this section, I assume you're already
+self-sufficient. All you need to do is add an Apt repo and accept the
+gpg key per the instructions.
+
+## 9.1.8. Session Info
+```{r}
+sessionInfo()
+```

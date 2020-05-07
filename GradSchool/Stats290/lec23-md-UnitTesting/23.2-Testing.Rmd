@@ -1,0 +1,112 @@
+---
+title: 23.2. Testing Code in Packages
+output:
+     slidy_presentation
+---
+
+```{r, echo = FALSE}
+installIfNeeded <- function(packages, ...) {
+    installedPackages <- installed.packages()[, 1]
+    toInstall <- setdiff(packages, installedPackages)
+    if (length(toInstall) > 0) install.packages(toInstall, ...)
+}
+installIfNeeded(c('RUnit', 'testthat', 'stringr'), repos = "https://cloud.r-project.org")
+```
+
+
+Wikipedia says:
+
+> In computer programming, unit testing is a software testing method
+> by which individual units of source code, sets of one or more computer
+> program modules together with associated control data, usage
+> procedures, and operating procedures, are tested to determine whether
+> they are fit for use.
+
+
+A test is merely of check of an actual result versus an expected
+result.  In R, the obvious things to test are functions since the R
+language has a functional flavor. So we'd usually be testing the
+output of a function versus what was expected.
+
+___
+
+R has always had a mechanism for including tests in packages. The
+package subdirectory `tests` is for test code. The basic idea is that
+you place an R file which is run in an R session and the entire output
+is compared with a saved file of expected output _that you provide as
+well_. For example, in the `stats` package tests, there is a file
+`glm.R`.
+
+```{r, eval = FALSE}
+## Example in which the fit for the null deviance fails to converge:
+# https://stat.ethz.ch/pipermail/r-help/2012-May/313161.html
+Y <- c(rep(0,35),1,2,0,6,8,16,43)
+beta <- 42:1
+cst <- lchoose(42, beta)
+tau <- (beta^2)/2
+fit <- glm(formula = Y ~ offset(cst) + beta + tau, family = poisson)
+```
+
+and also `glm.Rout.save`
+
+```
+R version 3.4.2 Patched (2017-11-17 r73741) -- "Short Summer"
+Copyright (C) 2017 The R Foundation for Statistical Computing
+Platform: x86_64-pc-linux-gnu (64-bit)
+
+R is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under certain conditions.
+Type 'license()' or 'licence()' for distribution details.
+
+R is a collaborative project with many contributors.
+Type 'contributors()' for more information and
+'citation()' on how to cite R or R packages in publications.
+
+Type 'demo()' for some demos, 'help()' for on-line help, or
+'help.start()' for an HTML browser interface to help.
+Type 'q()' to quit R.
+
+> ## Example in which the fit for the null deviance fails to converge:
+> # https://stat.ethz.ch/pipermail/r-help/2012-May/313161.html
+> Y <- c(rep(0,35),1,2,0,6,8,16,43)
+> beta <- 42:1
+> cst <- lchoose(42, beta)
+> tau <- (beta^2)/2
+> fit <- glm(formula = Y ~ offset(cst) + beta + tau, family = poisson)
+Warning messages:
+1: glm.fit: algorithm did not converge 
+2: In glm(formula = Y ~ offset(cst) + beta + tau, family = poisson) :
+  fitting to calculate the null deviance did not converge -- increase 'maxit'?
+> 
+> proc.time()
+   user  system elapsed 
+  0.189   0.034   0.203 
+```
+
+During the testing process, R simply runs `glm.R` and saves the output
+to `glm.Rout` and compares that to `glm.Rout.save`.  Differences are
+reported, but they don't cause an error.
+
+___
+
+Obviously, this kind of testing can only go so far.
+
+- No test of R structures
+- Only approximate comparisons
+- Accuracy problems.
+
+So a better testing mechanism is needed.
+
+##  Session Information
+```{r}
+sessionInfo()
+```
+
+
+
+
+
+
+
+
+

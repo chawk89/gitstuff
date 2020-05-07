@@ -1,0 +1,285 @@
+---
+title: 23.1. Package Information
+output:
+     slidy_presentation
+---
+
+As remarked earlier, a good way to look at the source packages on
+CRAN. Lectures 10 and 14 covered many details.
+
+Then you can also look at what happens on your machine when you
+actually install the package. 
+
+
+## 23.1.1. Structure of R package
+
+Here is a table that shows the various directories in a typical R
+source package.  _Auto_ indicates that some tools will generate this
+automatically for you.
+
+```{r, echo = FALSE}
+pkgStruct <- data.frame(
+    file = c("DESCRIPTION",
+             "NAMESPACE",
+             "data/",
+             "man/",
+             "R/",
+             "src/",
+             "vignettes/",
+             "demo/",
+             "tests/",
+             "exec/",
+             "inst/"),
+    description = c(
+        "Basic info about the package",
+        "Contains namespace directives describing the imports and exports. Auto",
+        "Contains datasets saved in RData format (extension .rda)",
+        "Help pages in rdoc format. Auto.",
+        "R code, written by user along with roxygen tags for documentation",
+        "C/C++, Fortran or other code",
+        "Vignettes for package in Rmd format (or Sweave)",
+        "Demo R scripts to show off the package.",
+        "Unit and other tests",
+        "Scripts that may be used by package, possibly in other languages",
+        "Other installed files or folders")
+    )
+knitr::kable(pkgStruct)
+```
+
+## 23.1.1. What lands where
+
+Let us examine the `Rcpp` package.
+
+Download the `Rcpp` source package. Examine where the various files
+land when the package is _installed_ on your machine.
+
+Do this for `dplyr` on your own, to really understand what is going
+on.
+
+_NOTE_ Do not forget that if you need to access auxilliary files or
+data that you bundled in your package, `system.file` provides a
+hassle-free way of getting at them.
+
+## 23.1.2. Dependencies
+
+```{r, echo = FALSE}
+deps <- data.frame(
+    Dependency = c(
+        "Depends",
+        "Imports",
+        "Suggests",
+        "Enhances",
+        "LinkingTo"),
+    Usage = c(
+        "Specifies a comma separated list of package names on which your package depends. They are attached when `library` or `require` is used with your package. Can specify version e.g. `MASS (>= 3.1-20)`. Can be repeated to specify upper/lower bounds",
+    "Specifies packages whose namespaces are imported. You access objects in imported namespaces via `::`",
+    "Same syntax as depends but these packages are not strictly necessary for the package to work. Used in vignettes that may use data from another package for illustration",
+  "Lists packages that your package adds to, embellishing either methods or classes",
+  "Used to declare the fact that your package might use header files in other packages"))
+knitr::kable(deps)
+```
+
+## 23.1.3. Import and Suggest
+
+It is good form to import only what is needed for your package. In
+other words, if your package uses function `foo` from package `bar`,
+it is better to use
+
+```{r, eval = FALSE}
+@importFrom foo bar
+```
+rather than
+
+```{r, eval = FALSE}
+@import foo
+```
+
+The latter imports everything in the package `foo`, whereas the former
+is specific.  Specificity is good!
+
+Importing a function, by hand, from another package requires the
+updating of at least two files: `DESCRIPTION` and `NAMESPACE`, always
+creating a possibility for mistakes. The function
+`devtools::use_package` does this automatically for you.
+
+___
+
+So when to import everything from a package?
+
+When you think you will be using pretty much everything! This should
+not be a flippant call, because there are consequences downstream and
+for the future.
+
+For example, S4 classes will need to pretty much import the entire
+`methods` package.  Otherwise, some wierd error messages might
+result. 
+
+More often, you will use `importFrom` to pick up specific things you
+need from various packages.
+
+
+## 23.1.4. Disambiguation
+
+Suppose we have a function `h` for our package as follows.
+
+```{r, eval = FALSE}
+#' The h function
+#' Plot \code{Sepal.Width} versus \code{Sepal.Length} for the \link[datasets]{iris} dataset
+#' @keywords graphics
+#' @importFrom ggplot2 qplot
+#' @export
+#' @examples
+#' h()
+#'
+h <- function() {
+    qplot(Sepal.Length, Sepal.Width, data = iris)
+}
+```
+Although the above looks fine and works alright, it could be improved.
+
+One thing is that later as you update your function `h` in future
+versions of the package, you may also import another function `qplot`
+from another package `quirky`, say. In that case, you want to control
+which `qplot` your function uses.
+
+So the recommended coding practice these days is to be _unambiguous_
+by using the fully qualified function name: `foo::f` for function `f`
+from package `foo`.
+
+```{r, eval = FALSE}
+#' The h function
+#' Plot \code{Sepal.Width} versus \code{Sepal.Length} for the \link[datasets]{iris} dataset
+#' @keywords graphics
+#' @importFrom ggplot2 qplot ggplot
+#' @export
+#' @examples
+#' h()
+#'
+h <- function() {
+    ggplot2::qplot(Sepal.Length, Sepal.Width, data = iris)
+}
+```
+
+To summarize: _import specifically and use unambiguously_. That is why
+the `devtools::use_package` recommends you to do that. 
+
+Many who convert R scripts into packages forget to do this, making
+their packages less robust: depending on what the user does, the
+results could be very different!
+
+___
+
+Next, recall that `library("foo")` or `require("foo")` both load
+package `foo` and attach it, i.e.  it place the package in the search
+path. _These will never to be used in a package, with `shiny` apps
+being the only exception!_
+
+But you can also plainly load a package: that is load the code, data,
+plus dynamically compiled code _without_ placing it on the search path
+using `loadNamespace` or `requireNamespace`.
+
+The latter may be used with a suggested package for example.
+
+```{r}
+library("ggplot2")
+search()
+qplot(1:10, 1:10)
+```
+
+```{r, error = TRUE}
+detach("package:ggplot2")
+search()
+qplot(1:10, 1:10)
+```
+
+The function `detach` merely removes it from the search path.
+However, the package namespace is still loaded. It is the namespace
+object that contains all the relevant code and objects you want to
+use.
+
+```{r}
+ggplot2::qplot(1:10, 1:10)
+```
+
+will work because of the explicit reference.
+
+## 23.1.5. Suggests
+
+The above idea of loaded name spaces can be exploited when your
+package _suggests_ other packages. For example, if you want to show
+off your package that allows for 3d plots, you want to use the package
+`rgl`. Not everyone may have it, and sometimes such packages may not
+be available on all platforms. But where available, you'd like to show
+some cool interactive 3d stuff!
+
+
+```{r, eval = FALSE}
+if (requireNamespace("rgl", quietly = TRUE)) {
+    rgl::plot3d(...)
+} else {
+    ## do something else not involving rgl.
+}
+```
+
+The above is a fail-safe method for loading `rgl` if it exists,
+othewise doing vanilla stuff.
+
+___
+
+As an example, consider the `cubature` package, source available on 
+[Github](https://bnaras.github.io/cubature/). We will examine the
+use of suggested packages. 
+
+The cubature vignette shows the effects of vectorization and how it
+can be exploited for great gains in speed. Points to note are:
+
+- For timing it uses a package called `benchr`
+- It compares how fast the routines are compared to another specialized
+  packages `mvtnorm`.
+- A user would be able to use this package perfectly without the other
+  packages. Therefore, it does not make sense to import the other
+  packages nor require the user install them.
+  
+Therefore, they belong in the _Suggests_ category! 
+
+## 23.1.6.  How exactly do `NAMESPACE`s work?
+
+From the R-exts manual:
+
+>  Namespaces are sealed once they are loaded. Sealing means that
+>  imports and exports cannot be changed and that internal variable
+>  bindings cannot be changed. Sealing allows a simpler implementation
+>  strategy for the namespace mechanism. Sealing also allows code
+>  analysis and compilation tools to accurately identify the definition
+>  corresponding to a global variable reference in a function body.
+  ...
+>  The namespace controls the search strategy for variables used by
+>  functions in the package. If not found locally, R searches the
+>  package namespace first, then the imports, then the base namespace
+>  and then the normal search path.
+
+__
+
+For example, the `nrow` function is defined as follows:
+
+```{r}
+nrow
+```
+
+Suppose in an R session, we change the `dim` function:
+```{r}
+dim <- function(x) "Got you"
+```
+and call `nrow` on a matrix.
+
+```{r}
+nrow(data.frame(x = letters[1:5], y = 1:5))
+```
+
+we still get a sane answer. Why? Because `nrow` is in the `base`
+package and it knows to look for it in that package. In other words,
+when the package was built and installed, the reference to `dim` in
+`nrow` was made to the appropriate function and _sealed_. (Well,
+sorta, but there are functions to manipulate namespaces too.)
+
+

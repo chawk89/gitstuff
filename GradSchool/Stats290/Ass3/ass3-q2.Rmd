@@ -1,0 +1,110 @@
+---
+title: 'Stat 290: Assignment 3: Q2'
+output:
+  html_document:
+    df_print: paged
+---
+
+## Dplyr Programming
+
+__2.__ [5pts] The reference for this exercise is the [Dplyr
+Programming](https://dplyr.tidyverse.org/articles/programming.html)
+vignette, which I will cover in class. So you might want to wait until
+I do do.
+
+Consider the following dataset.
+
+```{r, echo = FALSE, message = FALSE}
+library(tidyverse)
+d <- tibble(id = c(1, 2, 3, 4),
+            x1 = c("10", "<1", "NA", "8"))
+d
+```
+
+We want to write a function that converts the `x1` column to a numeric
+quantity and name it `x1.num`, so that we can look at both `x1` and
+its converted value side-by-side. See below for what is expected. 
+Here is a first try.
+
+```{r, error = TRUE}
+#' Mutate a dataset to convert a specified column to numeric
+#' @data the data set
+#' @param col_name name of the column
+#' @return mutated data set
+convert_column <- function(data, col_name) {
+    new_col_name <- paste0(col_name, ".num")
+    data %>%
+        mutate(new_col_name = as.numeric(col_name))
+}
+d %>%
+    convert_column("x1")
+```
+Doesn't work at all.  Fix it up so that it does. 
+
+
+```{r}
+#' Mutate a dataset to convert a specified column to numeric
+#' @data the data set
+#' @param col_name name of the column
+#' @return mutated data set
+convert_column_fixed <- function(data, col_name) {
+
+    new_col_name <- paste0(col_name, ".num")
+    print(new_col_name)
+    
+    data %>%
+        mutate_each(funs(as.numeric), !!new_col_name := col_name)
+  
+}
+
+##conversion wasn't working because 'mutate' in lazy evaluation was trying to convert the whole column (all or nothing), which couldn't be done. Using standard evaluation of mutate_each_.
+##to get the title to change correctly, based on tidyeval, we must unquote the left hand side of an assignment to get the value of a variable instead of the variable name.
+
+convert_column_fixed(d,"x1")
+
+
+
+```
+
+We will test it as follows. The results, with expected warnings, are
+shown. Passing these two tests alone will suffice to get full credit.
+
+## Test 1
+
+```{r, eval = FALSE}
+> d %>%
++     convert_column_fixed("x1")
+# A tibble: 4 x 3
+     id x1    x1.num
+  <dbl> <chr>  <dbl>
+1     1 10        10
+2     2 <1        NA
+3     3 NA        NA
+4     4 8          8
+Warning message:
+In evalq(as.numeric(x1), <environment>) : NAs introduced by coercion
+```
+
+
+## Test 2
+
+```{r, eval = FALSE}
+> d2 <- tibble(x=1:3, y=c("a1", "2", "3"))
+> d2 %>%
++     convert_column_fixed("y")
+# A tibble: 3 x 3
+      x y     y.num
+  <int> <chr> <dbl>
+1     1 a1       NA
+2     2 2         2
+3     3 3         3
+Warning message:
+In evalq(as.numeric(y), <environment>) : NAs introduced by coercion
+```
+
+## Session Info
+
+Leave as is.
+```{r}
+sessionInfo()
+```

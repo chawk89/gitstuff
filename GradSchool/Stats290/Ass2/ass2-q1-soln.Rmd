@@ -1,0 +1,141 @@
+---
+title: 'Stat 290: Assignment 2: Q1'
+output:
+  html_document:
+    df_print: paged
+---
+
+## Q1 (Short answers) [10 pts]
+
+__1.__ In class, we showed how to exploit scoping rules (see
+  `lec03-md/3.4-State-Preservation.html`) and created the function
+  `makePerson`. Here is the excerpted relevant part.
+
+```{r, eval = FALSE}
+makePerson <- function(lastName = "", firstName = "") {
+  getLastName <- function() lastName
+  getFirstName <- function() firstName
+  setLastName <- function(what)
+      lastName <<- what
+  setFirstName <- function(what)
+      firstName <<- what
+  getFullName <- function()
+      paste(lastName, firstName, sep = ", ")
+  list(getFullName = getFullName,
+       getFirstName = getFirstName,
+       getLastName = getLastName,
+       setFirstName = setFirstName,
+       setLastName = setLastName)
+}
+
+```
+
+__1a.__ What are the local variables to `makePerson`? Your answer should
+be a character vector of the local variables like `c("a", "b")` with
+`a` and `b` replaced appropriately. Empty vectors should be `c()`.
+```{r q_1a, eval = TRUE}
+##Your ANSWER HERE
+c("getFullName",
+  "getLastName",
+  "getFirstName",
+  "setLastName",
+  "setFirstName"
+  )
+
+```
+
+__1b.__ What are the bound promise variables to `makePerson`? Same
+answer format as 1a.
+```{r q_1b, eval = TRUE}
+##Your ANSWER HERE
+c("lastName",
+  "firstName"
+  )
+
+```
+
+__1c.__ What are the local variables to `setLastName`?
+```{r q_1c, eval = TRUE}
+##Your ANSWER HERE
+c()
+```
+
+__1d.__ What are the bound promise variables to `setLastName`?
+```{r q_1d, eval = TRUE}
+##Your ANSWER HERE
+c("what")
+```
+
+__1e.__ The above code can be used as follows:
+
+```{r, eval = FALSE}
+p1 <- makePerson("Blow", "Joe")
+p1$setLastName("Sixpack")
+p1$getLastName()
+```
+
+Now suppose `makePerson` is changed as below; note the change of args
+and calls to `setLastName` and `setFirstName`.
+
+```{r, eval = FALSE}
+makePerson <- function(x = "", y = "") {
+    getLastName <- function() lastName
+    getFirstName <- function() firstName
+    setLastName <- function(what)
+        lastName <<- what
+    setFirstName <- function(what)
+        firstName <<- what
+    getFullName <- function()
+        paste(lastName, firstName, sep = ", ")
+    setLastName(x)
+    setFirstName(y)
+    list(getFullName = getFullName,
+         getFirstName = getFirstName,
+         getLastName = getLastName,
+         setFirstName = setFirstName,
+         setLastName = setLastName)
+}
+```
+
+Consider what happens when we use it in an R session, just as before.
+
+```{r, eval= FALSE}
+p2 <- makePerson("Blow", "Joe")
+p2$setLastName("Sixpack")
+p2$getLastName()
+```
+
+Are the above two versions of `makePerson` equivalent? In other words,
+do the sequence of calls for `p1` and `p2` have the same effect?
+Answer `TRUE` if yes, `FALSE` if no. (Not quoted `"TRUE"` or
+`"FALSE"`, just plain R values, without quotes.)
+
+
+```{r q_1e, eval = TRUE}
+##Your ANSWER HERE
+FALSE
+```
+
+__1f.__ Justify your answer to 1e (1-2 sentences). Your answer should
+be text.
+
+```{r q_1f, eval = FALSE}
+##Your ANSWER HERE
+"You do get the expected answer on the surface 'Sixpack' but a variable
+lastName got created in the global environment!"
+```
+
+__Note to TAs__ This part of the answer below is only for explanation,
+the above answer will suffice from the students!.
+
+In general, the above is dangerous, because you `p2` will not behave
+predictably; changes in the global environment---which are
+inevitable---will change what happens as the example below shows.
+
+```{r, eval = FALSE}
+lastName <- "I can trip you up badly."
+p2$getLastName()
+```
+
+The moral of the story here is: `<<-` should be used judiciously where
+the scope can be carefully controlled! 

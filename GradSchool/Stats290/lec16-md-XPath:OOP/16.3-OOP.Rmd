@@ -1,0 +1,329 @@
+---
+title: 16.3 Object Oriented Programming Details
+output: slidy_presentation
+---
+
+```{r, eval = TRUE, echo = FALSE, message = FALSE}
+## Install a package if not already installed
+installIfNeeded <- function(packages, ...) {
+    toInstall <- packages[!(packages %in% installed.packages()[, 1])]
+    if (length(toInstall) > 0) {
+        install.packages(toInstall, repos = "https://cloud.r-project.org")
+    }
+}
+
+## Ensure packages exist and activate them
+needPackages <- function(packages) {
+    installIfNeeded(packages)
+    for (x in packages) {
+        library(x, character.only = TRUE)
+    }
+}
+needPackages("glmnet")
+```
+
+From Prof. Chambers' lecture, you have already been introduced to the
+OOP facilities in R. Here I will summarize them together and delve
+into the details.
+
+## 16.3.1. OOP in R
+
+_There are several OOP systems in R._
+
+- The venerable `S3` system, that you encounter evertime you use
+  R. Informal, yet widely used with generic functions that define what
+  happens when a function is called on the object
+
+- The `S4` class , which is a more formal version, but you explictly
+  define classes with slots. One can can define methods for your
+  object and use generic functions to define which method gets called
+  depending on the classes of arguments. Note that you can dispatch
+  based on the class of any number of arguments, i.e. you have
+  _multiple dispatch_.
+
+- Reference classes (sometimes also called `R5` or `RC`) based on `S4`
+  that provide OOP like Java to an extent.
+
+- `R6` which is a newer facility provided by the package also named
+    `R6` which are closer in spirit to the message passing systems
+    that languages like Java use.
+
+___
+
+The key point to understand, as was emphasised by John Chambers, is
+that in the standard OOP, _methods and fields belong to classes_. That
+is in a language like Java, `foo.bar()` is a method named `bar`
+defined in class `foo`. Depending on the design of the class, that
+`bar` method may have access to some fields or even fields of its
+superclasses. But the key fact is that these are all aspects of the
+class.
+
+On the other hand, in a functional language like R, all you have
+function calls. Therefore, your functions have to operate on objects
+if you want to implement OOP.
+
+Which means that when a function `f(x, ...)` is called, there needs to
+be a way for the functional language to figure out what class `x` is
+and called the appropriate method corresponding to `f` on that class
+with arguments `...`. If the method modifies some feature of the
+object, generally a _copy_ of the modified object is returned.
+
+But since there could conceivably be many classes with method `f`,
+there needs to be a table that suggests what to do. Such a table, for
+example, could be used to make decisions such as:
+
+- if `x` of class `foo`, call `foo.f(...)`
+- if `x` is of class `bar`, call `bar.f(...)`
+etc. etc.
+
+In summary, in a functional language, the construct `foo.f(...)`
+effectively has to be converted into `f(foo, ...)` via a _generic_
+function `f` that looks up a table to decide what to do.
+
+___
+
+## 16.3.2. The `S3` paradigm
+
+This paradigm is an informal system that is still widely
+used. Basically, all it involves is assigning any R object a _class_
+attribute and voila it becomes an S3 class. Of course, to do anything
+useful using the class, you will have to write methods that actually
+behave the way you want the class the behave.
+
+For example, `glmnet` is a popular package for regularized fitting of
+lasso or elastic-net models on large data sets.
+
+```{r, message = FALSE}
+library(glmnet)
+set.seed(1)
+x <- matrix(data = rnorm(100 * 20), nrow = 100, ncol = 20)
+y <- rnorm(100)
+fit <- glmnet(x = x, y = y)
+class(fit)
+```
+
+In the above, the constructor function, i.e., the one that creates
+objects of a class, is effectively `glmnet`.
+
+```{r}
+plot(fit)
+```
+
+Now, how did `plot` know to generate a plot such as the one above?
+
+___
+
+We can examine this by looking at the source for the `plot` function
+
+```{r}
+plot
+```
+The `UseMethod` call tells us that this is a generic function.  It
+basically states: _use the appropriate method for the arguments passed
+to plot_.
+
+So can we examine what possible methods are available for `plot`? Yes,
+using the `methods()` function.
+
+```{r}
+methods(plot)
+```
+
+Note that one of them is `plot.glmnet`. Ok, so what is the connection
+between `plot.glmnet` and `fit`? Note above that `fit` is of class
+`glmnet` (and also `elnet`, but there is not `plot.elnet`).
+
+So, when we called `plot(fit)`, that got dispatched to
+`plot.glmnet(fit)` which knew what plot to produce.
+
+___
+
+To be sure, we can explicitly call that function to see if we get the
+same result.
+
+```{r}
+glmnet:::plot.glmnet(fit)
+```
+
+__NOTE__: We use the three colon notation here because `plot.glmnet`
+is not an exported function from the `glmnet` package, and is internal
+to `glmnet`.
+
+___
+
+You can list the various generic functions for the class names.
+
+For class `glmnet`.
+
+```{r}
+methods(class = "glmnet")
+```
+
+For class `elnet`.
+
+```{r}
+methods(class = "elnet")
+```
+___
+
+### 16.3.3. A bit more about generics
+
+What about `+`? Is it generic?
+
+```{r}
+`+`
+```
+
+So it appears not since there is no `UseMethod()` call, but it
+actually is. Why? Because, by listing the various methods for `+` we
+see that it actually behaves differently for different objects.
+
+```{r}
+methods(`+`)
+```
+
+This tells us that R knows what to do with `+` for dates and times!
+
+Therefore, `UseMethod()` alone is not a good test and so the package
+`pryr` is a good help.
+
+```{r}
+library(pryr)
+ftype(plot)
+ftype(`+`)
+```
+___
+
+### 16.3.4. Defining your own methods
+
+When you have an S3 class, generics like `print` and `plot` are
+already available. So you don't need to do anything special if you
+want to invoke a `print` or a `plot` method for your object.
+
+For example, consider a data frame that can be plotted:
+
+```{r}
+d <- data.frame(a = 1:5, b = (1:5)^2)
+class(d)
+```
+If we invoke plot on it, it works fine.
+
+```{r, error = TRUE}
+plot(d)
+```
+
+___
+
+As we discussed in lecture 9.1, what happened behind the scenes is
+that `graphics:::plot.data.frame` was called as can be seen from:
+
+```{r}
+methods(plot)
+```
+
+and
+
+```{r}
+getAnywhere("plot.data.frame")
+```
+___
+
+Now suppose we want to use `ggplot2` instead of base plot for the
+scatterplot.
+
+One way we could do this is to change the class.
+
+```{r}
+class(d) <- c("ggplot_able", class(d))
+class(d)
+```
+
+Now we have to define our own method for plotting, borrowing from
+`graphics:::plot.data.frame`.
+
+```{r}
+plot.ggplot_able <- function(x, ...) {
+    stopifnot(require("ggplot2"))
+    plot2 <- function(x, xlab = names(x)[1L], ylab = names(x)[2L],
+        ...) qplot(x[[1L]], x[[2L]], xlab = xlab, ylab = ylab,
+        ...)
+    if (!is.data.frame(x))
+        stop("'plot.ggplot_able' applied to non data frame")
+    if (ncol(x) == 1) {
+        qplot(x[[1L]], ...)
+    } else if (ncol(x) == 2) {
+        plot2(x, ...)
+    } else {
+        stop("plot.ggplot_able: Don't know what to do")
+    }
+}
+```
+
+And try it.
+
+```{r}
+plot(d)
+```
+
+It works.
+
+But what if you have a new method that _you_ want to write? For
+example, a function for returning a particular row in a data frame.
+
+Use `UseMethod`.
+
+```{r}
+nthRow.data.frame <- function(x, n) {
+    if (0L < n && n <= nrow(x))
+        x[n, ]
+    else
+        stop("nthRow.data.frame: Bad value for n")
+}
+
+nthRow <- function(x, n) UseMethod("nthRow")
+```
+
+And we can check.
+
+```{r}
+nthRow(d, 2)
+```
+___
+
+## 16.3.5. Ramifications
+
+1. Because of this association of the period with methods for S3
+   objects, it is best to avoid periods in names of functions, even
+   though it is legitimate; it makes those functions look like methods
+   for S3 objects. So many people have started using camel-case or
+   underscores to avoid such confusion.
+
+2. There can be issues if two different packages define the same S3
+   classes and methods for them. A recent example was the case of
+   `mgcv` and `gam` both of which defined S3 classes called `gam` and
+   methods. 
+   
+3. The S3 system provides all sorts of opportunities for you to shoot
+yourself in the foot. Consider for example the following.
+```{r, error = TRUE}
+class(d) <- "foobar"
+plot(d)
+```
+What happened?  We changed the class attribute of `d` to be something
+other than a `data.frame` and so plot went ahead and called a default
+method `plot.default`, the catch-all. And all hell broke loose.
+
+Since class is merely an attribute in the `S3` system. nothing stops
+you from changing it. So there are no guarantees with this type of
+class system.
+
+A more formal system called `S4` overcomes these issues.
+
+___
+
+## 16.3.6. Session Info
+
+```{r}
+sessionInfo()
+```
+

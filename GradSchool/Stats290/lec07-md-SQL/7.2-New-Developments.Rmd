@@ -1,0 +1,215 @@
+---
+title: "7.2. New Developments"
+output:
+     slidy_presentation
+---
+```{r requirements, echo = FALSE}
+## Install a package if not already installed
+install_if_needed <- function(packages, ...) {
+    toInstall <- packages[!(packages %in% installed.packages()[, 1])]
+    if (length(toInstall) > 0) {
+        install.packages(toInstall, repos = "https://cloud.r-project.org")
+    }
+}
+
+## Ensure packages exist and activate them
+need_packages <- function(packages) {
+    install_if_needed(packages)
+    for (x in packages) {
+        library(x, character.only = TRUE)
+    }
+}
+need_packages(c("tidyverse", "RSQLite", "DBI", "dbplyr", "keyring"))
+```
+
+Rstudio is now making a big push to make R connect to well-known
+databases; see [http://db.rstudio.com/](http://db.rstudio.com/).
+
+The package `dbplyr` provides facilities to connect to all manner of
+databases in a uniform way. It provides further facilities for
+exploiting computations at the backend (i.e. database) for efficiency,
+especially with large datasets.
+
+We already saw a bit of this.
+
+```{r}
+mtu_precipitation  <- readRDS("mtu2.RDS")
+con <- DBI::dbConnect(RSQLite::SQLite(), path = ":memory:")
+dplyr::copy_to(con, mtu_precipitation, "mtu_precipitation", temporary = FALSE )
+tbl(src = con, "mtu_precipitation")
+```
+
+```{r}
+dbDisconnect(con)
+```
+
+## 7.2.1. Securing Credentials
+
+When using databases in enterprise, one often has to connect using
+some authentication. This means one has to store credentials
+(username, password) in a safe place and not accidentally expose
+them. 
+
+We will just discuss one method, using the `keyring` package that lets
+you work with the credential manager on your platform (MacOS Keyring,
+or Windows 10 Credential Store) as this will be familiar and
+useful. This material is from the Rstudio docs.
+
+Credential stores contain keyrings. Keyrings contain keys, which are
+really tuples containing 
+
+- `service`: a service identifier (web resource, or database resource)
+- `keyring`: the key's parent keyring, default keyring if not specified
+- `username`: username for the service
+- `password`: password for the service
+
+One retrieves the keyring data by passing an optional keyring name and
+a service name. 
+
+The `keyring::key_set()` function is used to create the key; a prompt
+will appear asking for the password that should be used for the key. 
+
+```{r, eval = FALSE}
+keyring::key_set(service = "junk", username = "naras")
+```
+In Rstudio, this will throw up a dialog asking you for your password
+which will be stored in the keyring.
+
+You can list your keys in the default keyring:
+
+```{r}
+my_keys <- keyring::key_list()
+tibble::glimpse(my_keys)
+```
+
+List keys for service `Box Sync` for example.
+
+```{r}
+my_keys %>%
+    filter(service == 'Box Sync')
+```
+
+To safely obtain a password for the `Box Sync` service, say, one would
+use:
+
+```{r, eval = FALSE}
+keyring::key_get("Box Sync")
+```
+
+So this suggests a clean way of using credentials when you want to log
+into a service, which may be a database service for which you stored
+credentials using `keyring::key_set(service, username)` as shown
+above.
+
+The same applies to tokens for web APIs which we will discuss later. 
+
+## 7.2.2. Safe Queries
+
+Let us consider our precipitation dataset. Suppose we want to write a
+function to query the first date when the cumulative precipitation
+went over a certain limit.
+
+```{r}
+when_first_hit <- function(limit) {
+    driver <- dbDriver(drv = "SQLite")
+    conn <- dbConnect(driver, dbname = "mtu.sqlite")
+    query <- paste0("select * from mtu_precipitation where Precipitation >", limit)
+    result <- dbGetQuery(conn = conn, query)
+    dbDisconnect(conn)
+    result %>% 
+        filter(row_number() == n()) %>%        ## Last row only
+        mutate(Date = as.Date(as.POSIXct(DateAndTime, origin = "1970-01-01"))) %>% 
+        select(Date, Precipitation)
+}
+```
+
+Let's try this function.
+
+```{r}
+when_first_hit(10)
+when_first_hit(7)
+```
+
+Good so far.  But the user of our function can be nasty and pass an
+arbitrary query if we are not careful.
+
+```{r}
+when_first_hit("10 or Precipitation <= 10")
+```
+
+This is called _SQL Injection_ and many a website hack has been
+because of this. 
+
+The recommended way to avoid this is to use a parametrized query.  So
+we rewrite the function in a better way. 
+
+```{r}
+when_first_hit <- function(limit) {
+    driver <- dbDriver(drv = "SQLite")
+    conn <- dbConnect(driver, dbname = "mtu.sqlite")
+    ## ? is a placeholder for parameter
+    query_sql <- "select * from mtu_precipitation where Precipitation > ?"
+    rs<- dbSendQuery(conn = conn, query_sql)
+    query <- dbBind(rs, list(limit))
+    d <- fetch(query)
+    dbClearResult(rs)
+    dbDisconnect(conn)
+    d %>% 
+        filter(row_number() == n()) %>%        ## Last row only
+        mutate(Date = as.Date(as.POSIXct(DateAndTime, origin = "1970-01-01"))) %>% 
+        select(Date, Precipitation)
+}
+```
+
+Other ways suggested:
+
+- Use a parameterized query with `dbSendQuery()` and `dbBind()`
+
+- Use the `sqlInterpolate()` function to safely combine a SQL string with data
+
+- Manually escape the inputs using `dbQuoteString()`
+
+## 7.2.3. DuckDB
+
+The `duckdb` package is similar to `SQLite` with full support for
+dates and timestamps and is also based on column storage, making it
+very useful as an embedded analytic database.
+
+```{r}
+library(duckdb)
+read_csv("201508_trip_data.csv",
+         col_names = c("trip_id", "duration", "start_date", "start_station",
+                       "start_terminal", "end_date", "end_station", "end_terminal",
+                       "bike_no", "subscriber_type", "zip_code"),
+         skip = 1,
+         col_types = cols(
+             start_date = col_datetime( format = "%m/%d/%Y %H:%S"),
+             end_date = col_datetime( format = "%m/%d/%Y %H:%S")
+         )) ->
+    trips
+
+con <- DBI::dbConnect(duckdb::duckdb())
+dbWriteTable(conn = con, name = "trips", value = trips)
+DBI::dbListTables(con)
+```
+
+We can read it back and list the table contents.
+
+```{r}
+library(magrittr)
+con %>% tbl('trips')
+dbDisconnect(con, shutdown=TRUE)
+```
+
+Note how the time stamps are retained. 
+
+## 7.2.2. Resources
+
+- Rstudio `dbplyr` [website](https://db.rstudio.com/).
+- More on [`duckdb`](https://www.duckdb.org) 
+
+## 7.2.3. Session Info
+
+```{r}
+sessionInfo()
+```

@@ -1,0 +1,184 @@
+---
+title: 27.1. High Performance Computing
+output:
+     slidy_presentation
+---
+
+  The term _High Performance Computing_ has come to encompass
+  several things.
+
+1. Gains in efficiency/scale by utilizing several machines
+    (processors/cores) to do a single task. Embarrassingly parallel
+    tasks are common candidates for this.
+
+2. Gains in efficiency/scale by developing specialized algorithms
+    for problems: Specialized Linear Algebra routines may be designed
+    using matrix block structure or sparse matrices, or distributed
+    blocks of matrices.
+
+3. Gains in speed by using compiled code for routines that are
+    called with high frequency. Interfaces to C code, `Rcpp`
+    are common.
+
+4. Gains in scale alone by utilizing infrastructure that can deal
+    with very large objects. Examples are `MapReduce`
+    infrastructures such as Hadoop and Spark.
+
+  Several of the above require specialized infrastructure.
+
+
+## 27.1.1. Parallel Computing in R
+
+R has a number of tools for exploiting parallelism. But before we
+delve into that a few details regarding the milieu where you might
+use those tools
+
+- A computing cluster setup either in your institution. At
+      Stanford, we have _farmshare_ or _sherlock_. The
+      latter is only for grant funded research.
+- A cloud set up such an an Amazon cluster. Technically, there
+      isn't any real difference between a cluster setup described
+      above and Amazon/Google/Azure, except for the way one spins up
+      cluster machines and how things cost. So we will not be
+      discussing this since this is all documented on the vendor's
+      page.
+- On your own computer. Laptops these days are pretty powerful
+      and you can prototype many parallel computations on your laptop
+      before dissemination.
+
+Many R packages work reasonably on Macs, Windows and Unixes. So it is
+easiest to experiment with small examples on your own computer
+first and then move to a full-fledged cluster.
+
+___
+
+## 27.1.2. The `parallel` package
+
+- Part of R since version 2.14
+- Provides analogous constructs of `lapply` for parallel
+    computing.
+- Has good support for parallel random number generation
+- Can experiment on your laptop
+
+Most machines these days have several cores and so lend themselves to
+experimentation.
+
+___
+
+## 27.1.3. A simple example.
+
+By default, R comes with a package called `parallel`. Let's try a
+simple example of computing some function values.
+
+
+```{r}
+library(parallel)
+nCores <- detectCores()
+print(nCores)
+```
+
+This reports that _my_ machine has 8 cores (because of
+hyperthreading).
+
+___
+
+The basic steps are:
+
+1. Make a cluster with a specified number of workers.
+2. Export whatever variables etc. the workers need
+3. Apply some function to get a job done on each of the workers.
+
+```{r}
+nCores <- 3  ## Let me just use 3 ( = 8 / 4 - 1)
+cl <- makeCluster(nCores)
+## Create a list of vectors containing 10 normals each
+d <- lapply(seq_len(nCores), function(x) rnorm(10))
+## Export to all nodes in the cluster
+clusterExport(cl, "d")
+result <- parLapply(cl, seq_len(nCores), function(x) mean(d[[x]]))
+print(result)
+directResult <- lapply(d, mean)
+identical(result, directResult)
+stopCluster(cl)
+```
+
+___
+
+We can also use `parSapply` instead of `parLapply` to get a simplified
+result back.
+
+
+```{r}
+cl <- makeCluster(nCores)
+## Create a list of vectors containing 10 normals each
+d <- lapply(seq_len(nCores), function(x) rnorm(10))
+## Export to all nodes in the cluster
+clusterExport(cl, "d")
+parSapply(cl, seq_len(nCores), function(x) mean(d[[x]]))
+stopCluster(cl)
+```
+
+___
+
+Suppose we wanted each of the cluster nodes to have their own data and
+not have the data sent to them.
+
+```{r}
+cl <- makeCluster(nCores)
+## Create a list of vectors containing 10 normals each
+w <- clusterEvalQ(cl, { d <- rnorm(10) })
+parallelResult <- parSapply(cl, seq_len(nCores), function(x) mean(d))
+identical(parallelResult, sapply(w, mean))
+stopCluster(cl)
+```
+
+The function `clusterEvalQ` evaluates a _literal_ expression on each
+of the nodes, which results in a variable `d` being created _on each_
+of the nodes.
+
+___
+
+In a case when such data generation can result in large results, you
+don't want the data to be returned.  A common way to ensure that is to
+return some small value such as `NULL` thus:
+
+```{r}
+cl <- makeCluster(nCores)
+## Create a list of vectors containing 10 normals each
+clusterEvalQ(cl, { d <- rnorm(10); NULL })
+parSapply(cl, seq_len(nCores), function(x) mean(d))
+stopCluster(cl)
+```
+
+___
+
+## 27.1.4. Functions in `parallel` package.
+
+Most of the user functions are under the help on `clusterApply`. Let
+us examine this help a bit.
+
+The `LB` version of functions do load balancing. This is because the
+number of nodes you have for computation may not exactly match the
+number of tasks you have.
+
+For example, `clusterApplyLB` is a load balancing version of 'clusterApply'.
+
+- If the number of tasks `p` is not greater than the number of nodes
+`n`, then one job each is sent to `p` nodes.
+
+- If the number of tasks `p` is greater than the number of nodes
+`n`, then the first `n` jobs are sent to the `n` nodes in order. When
+the first job completes---this is non-deterministic---the next job is
+placed on that free node. This is repeated until all jobs are done.
+
+Generally, load balancing helps, but there is increased communication
+cost and that may offset the performance gains. Also note the
+non-determinism.
+
+___
+
+## 27.1.5. Session Info
+
+```{r}
+sessionInfo()
+```

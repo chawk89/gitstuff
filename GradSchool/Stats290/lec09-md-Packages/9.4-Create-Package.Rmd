@@ -1,0 +1,342 @@
+---
+title: "9.4. Creating an R Package"
+output:
+     slidy_presentation
+---
+
+```{r, echo = FALSE}
+## Install a package if not already installed
+installIfNeeded <- function(packages, ...) {
+    toInstall <- packages[!(packages %in% installed.packages()[, 1])]
+    if (length(toInstall) > 0) {
+        install.packages(toInstall, repos = "https://cloud.r-project.org")
+    }
+}
+
+## Ensure packages exist and activate them
+needPackages <- function(packages) {
+    installIfNeeded(packages)
+    for (x in packages) {
+        library(x, character.only = TRUE)
+    }
+}
+needPackages("pkgKitten")
+```
+
+## 9.4.1. Some Background
+
+The packaging mechanism of R is one of its greatest strengths. And it
+is simple enough that anyone can get started.
+
+Simply put, an R package is a directory that follows some naming and
+organizational conventions. The package structure is general enough to
+provide for
+
+- R Code
+- Data in both R-specific and non-R formats
+- Documentation and Vignettes
+- Tests
+- Additional code, libraries and scripts in languages other than R
+- Miscellaneous files
+
+___
+
+
+Vanilla R provides a function called `package.skeleton()` that can be
+used to create the outlines of a package. Arguments to it are some
+objects or R source code files to start off your package, along with a
+name, say `foobar` for the package. It goes off and creates a
+directory with that name for the source package, with files
+
+- `DESCRIPTION`
+- `NAMESPACE`
+- subdirectories `R` and `man`
+
+Your task is to then edit the `DESCRIPTION` file and the
+documentation files.
+
+When done, the R tools can then build and install from this
+directory. In reality, of course, you will often need to create some
+other subdirectories (e.g. for C/C++ code, tests, other miscellaneous
+stuff).
+
+The problem is that the produced package skeleton requires substantial
+work to be even considered a package by R: it really is a skeleton! 
+
+So despite the description in the `R-exts` manual, best to ignore
+this.
+
+
+## 9.4.1. Package `pkgKitten`
+
+A better example is `pkgKitten` which actually creates a package that
+works!
+
+
+This package lets you create a simple _hello world_ package.
+
+
+```{r}
+library(pkgKitten)
+## Remove a previous directory ted if it exists when we render
+## this markdown
+unlink("./moo", recursive = TRUE)
+kitten(name = "moo",
+       author = "Moo, The cow who believes he's a dog!",
+       email = "moo@somewhere.com")
+```
+
+This creates a simple package with the appropriate structure.  Let us
+examine the files in some detail.
+
+___
+
+### 9.4.1.1. The `DESCRIPTION` file
+
+This provides the meta-data for the package. Includes author, email,
+license, version, description etc.
+
+```
+Package: ted
+Type: Package
+Title: What the Package Does Using Title Case
+Version: 1.0
+Date: 2019-01-30
+Author: Ted, The cat who believes he's a dog!
+Maintainer: Ted, The cat who believes he's a dog!
+       <ted@somewhere.com>
+Description: More details about what the package does. See
+       <http://cran.r-project.org/doc/manuals/r-release/R-exts.html#The-DESCRIPTION-file>
+       for details on how to write this part.
+License: GPL (>= 2)
+```
+
+___
+
+### 9.4.1.2. The `NAMESPACE` file
+
+This file dictates what facilities in the `ted` package any user of
+the `ted` package will be able to use, such as functions, data,
+etc.
+
+Since packages can depend on other packages and so this file also
+indicates what stuff from other packages is used by this `ted`
+package.
+
+```
+exportPattern("^[[:alpha:]]+")
+```
+
+The incantation above means: make any R object in this package that
+starts with _an alphabetic character_ available to a user of the `ted`
+package. 
+
+___
+
+### 9.4.1.3. The `R` directory
+
+This directory contains just one file `hello.R` with contents
+
+```{r, eval = FALSE}
+## a placeholder
+hello <- function(txt = "world") {
+    cat("Hello, ", txt, "\n")
+}
+
+hello2 <- function(txt = "right now") {
+    cow("Let's go ", txt, "\n")
+}
+
+```
+
+which just prints a string `Hello, world` by default.
+
+___
+
+### 9.4.1.4. The `man` directory
+
+This contains two files `hello.Rd` and `ted-package.Rd`.
+
+These are documentation for the `hello` function and also the `ted`
+package as a whole.
+
+___
+
+
+## 9.4.2. Build the package
+
+```{bash}
+R CMD build moo
+```
+
+This produces a file `ted_1.0.tar.gz`, the _source_ package.
+
+
+## 9.4.3. Check the package
+
+```{bash}
+R CMD check moo_1.0.tar.gz
+```
+
+This creates a file `ted.Rcheck` that contains a whole bunch of
+things. If things go wrong, this is where you would look.
+
+Ok, this one passes.
+
+
+## 9.4.4. Let us use it
+
+
+```{bash}
+R CMD INSTALL moo_1.0.tar.gz
+```
+
+Installation worked, so let us get some info.
+
+```{r}
+packageDescription("stat290.ass2")
+stat290.ass2::hello()
+stat290.ass2::ploT
+library(help = stat290.ass2)
+ls(stat290.ass2)
+```
+
+Let us use it.
+
+```{r}
+library(moo)
+library(help = moo)
+
+ls(moo)
+help?moo
+hello()
+hello2()
+```
+
+We can look up help.
+
+```{r, eval = FALSE}
+help(hello)
+```
+
+We can run the examples.
+
+```{r}
+example(hello)
+```
+
+___
+
+## 9.4.5. Further Details of Source Directory Organization
+
+We shall soon see how a package called `devtools` can be exploited to
+generate a suitable template with much less effort. Even as I highly
+recommend it, it is important that you know the full details.
+
+___
+
+### 9.4.5.1. More on the `Description` file
+
+In the description file, the `Package`, `Version`, `License`,
+`Description`, `Title`, `Author`, and `Maintainer` fields are
+mandatory, all other fields are optional.
+
+___
+
+### 9.4.5.2. More on the `NAMESPACE` file
+
+This file allows a package author to specify what
+variables and functions are visible to users of the package. It also
+allows a package author to specify what functions and variables from
+other packages are used by the system, for example function `f` from
+package `p`.
+
+This file also indicates what dynamic libraries may need to be loaded
+(for compiled C/C++ or similar code).
+
+The namespace controls the search strategy for variables used by
+functions in the package. If not found locally, R searches the package
+namespace first, then the imports, then the base namespace and then
+the normal search path.
+
+___
+
+### 9.4.5.3. The `man` directory
+
+This directory contains files that provide help for the
+package. Examine the ones for the `ted` package.
+
+The documentation is in a markup language (Rdoc, with extension `.Rd`)
+inspired by TeX/LaTeX, with facilities for math formulas.
+
+_This is the most painful part to do by hand_.
+
+Luckily for us, we will see how to use a package called `roxygen` with
+`devtools` to document the package with far less effort.
+
+___
+
+### 9.4.5.4. The `data` directory
+
+This contains datasets that are provided by the package. The files
+here have extensions `.rda` and are usually saved using the `save`
+command in R. (`devtools` will do this for you!)
+
+Datasets can be _internal_ (not exported) as well as _exported_, the
+most common case.
+
+___
+
+### 9.4.5.5. The `tests` directory
+
+This directory is for additional package-specific test code, similar
+to the specific tests that come with the R distribution. Once again,
+we will use a package called `testthat` to help us write these tests.
+
+___
+
+### 9.4.5.6. The `src` directory
+
+This directory is for `C/C++` or `Fortran` files that may need to be
+compiled into a dynamic library. The important thing to note is that
+the R packaging system automates the building of the dynamic libraries
+in a portable manner and so it is important to work within that
+system.
+
+___
+
+### 9.4.5.7. The `exec` directory
+
+This directory is for any additional executable scripts etc. These can
+be in any language, but you have to worry about what is available on
+the platform where the package is installed to ensure that things work
+correctly.
+
+___
+
+### 9.4.5.8. The `vignettes` directory
+
+This directory contains _vignettes_ for your package. Vignettes are a
+good way to introduce your package to users. These days, I would
+highly recommend R markdown vignettes since they are very
+flexible. (Sweave vignettes are also ok, but they are less flexible!)
+
+___
+
+### 9.4.5.9. The `inst` directory
+
+A very important directory that gives you flexibility to include _any
+other resource_ needed by your package.  
+
+
+## 9.4.6. Summary
+
+As you examine package contents on CRAN, be sure to look at the source
+where you can see how others have used these various directories, in
+particular, `tests` and `inst` directories.
+
+
+## Session Info
+```{r}
+sessionInfo()
+```

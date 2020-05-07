@@ -1,0 +1,269 @@
+---
+title: 'Stat 290: Assignment 3: Q3'
+output:
+  html_document:
+    df_print: paged
+---
+
+## 3. Computing on the language.
+
+__3.__ (10 points) Drug companies who sponsor clinical trials costing
+  millions of dollars often mine the finalized data from the trial to
+  determine if their treatment works in specific subgroups of patients
+  with certain characteristics. For example, if a treatment seems to
+  show greater effect in a subset of patients who are _female_,
+  _non-smokers_ and _hypothyroid_, then they would like to study it
+  further or or even sponsor further trials after perhaps doing due
+  adjustments (false discovery rate or multiple testing
+  corrections). It is not unusual for them to use a set of say 5 to 10
+  variables to generate these subsets. These subsets are generated
+  using boolean logic with the `and/or` conjunctions. Examples of
+  selection clauses:
+
+
+```{r, eval = FALSE}
+Sex == "male"
+Sex == "female"
+Sex == "male" and SmokingHx == "current"
+Sex == "male" and SmokingHx != "current" and CancerStage == "II"
+```
+
+In order to keep things simple, assume the conjunction is always
+`and/or` and the two are not mixed together. Also assume that a data
+frame containing these variables is provided in `trial.RDS`. Then the
+whole problem becomes a subsetting exercise _except that the clauses
+for subsetting have to be programmatically generated_. The only
+variables you need to deal with are: `Sex`, `SmokingHx`,
+`CancerStage`, `remission` and `trt`.
+
+```{r}
+trial <- readRDS("trial.RDS")
+```
+
+__3a.__ (2 points) Write a function `makeClause` with the following signature:
+
+```{r eval = FALSE}
+makeClause <- function(Sex = c(NA, "male", "female"),
+            SmokingHx = c(NA, "current", "former", "never"),
+            CancerStage = c(NA, "I", "II", "III", "IV"),
+            conjunction = c("&", "|")) {
+...
+}
+```
+that will return an appropriate subset clause as a character
+string. The values specified in `c(NA, ...)` for the arguments are the
+only ones allowed.
+
+Examples of its use with results:
+
+```{r eval = FALSE}
+> makeClause()
+[1] "TRUE"
+> makeClause(Sex = "female")
+[1] "(Sex == 'female')"
+> makeClause(Sex = "female", SmokingHx = "NA", CancerStage = "NA")
+[1] "(Sex == 'female')"
+> makeClause(Sex = "male", CancerStage = "IV")
+[1] "(Sex == 'male') & (CancerStage == 'IV')"
+> makeClause(Sex = "female", SmokingHx = "NA")
+[1] "(Sex == 'female')"
+> makeClause(Sex = "male", CancerStage = "IV", SmokingHx = "NA",  conjunction = "|")
+[1] "(Sex == 'male') | (CancerStage == 'IV')"
+> makeClause(Sex = "female", CancerStage = "IV", SmokingHx = "never", conjunction = '|')
+[1] "(Sex == 'female') | (SmokingHx == 'never') | (CancerStage == 'IV')"
+```
+
+The order of the variables in the output clause string _does matter_
+for grading. So does the use of single and double quotes. The extra
+space around the `==` or `|` or `&` doesn't matter but is worth
+striving for since it is the sort of detail that programmers notice.
+
+Ensure that `Sex` always precedes `SmokingHx` which always precedes
+`CancerStage` (see last example above).  Note also how variables with
+`NA` values do not enter into the clause. _Hint:_ Helpful functions
+are: `match.arg`, `sprintf`.
+
+
+```{r q3a}
+## Your function makeClause here
+## makeClause <- ...
+makeClause <- function(Sex = c(NA, "male", "female"),
+                       SmokingHx = c(NA, "current", "former", "never"),
+                       CancerStage = c(NA, "I", "II", "III", "IV"),
+                       conjunction = c("&", "|")) {
+    conjugate <- function(clause) {
+        if (clause == "") clause else paste(clause, conjunction, "")
+    }
+
+    clause <- ""
+
+    Sex <- match.arg(Sex)
+    if (!is.na(Sex))
+        clause <- sprintf("(Sex == '%s')", Sex)
+
+    SmokingHx <- match.arg(SmokingHx)
+    if (!is.na(SmokingHx)) {
+        clause <- sprintf("%s(SmokingHx == '%s')", conjugate(clause), SmokingHx)
+    }
+
+    CancerStage <- match.arg(CancerStage)
+    if (!is.na(CancerStage)) {
+        clause <- sprintf("%s(CancerStage == '%s')", conjugate(clause), CancerStage)
+    }
+    ifelse(clause == "", "TRUE", clause)
+}
+```
+This section merely checks if you did the above, and runs the calls
+above. Leave as is.
+
+```{r, error = TRUE}
+## Leave chunk alone
+if (!exists("makeClause")) {
+    cat("makeClause not found for problem 3a!")
+} else {
+    print(makeClause())
+    print(makeClause(Sex = "female"))
+    print(makeClause(Sex = "female", SmokingHx = "NA", CancerStage = "NA"))
+    print(makeClause(Sex = "male", CancerStage = "IV"))
+    print(makeClause(Sex = "female", SmokingHx = "NA"))
+    print(makeClause(Sex = "male", CancerStage = "IV", SmokingHx = "NA",  conjunction = "|"))
+    print(makeClause(Sex = "female", CancerStage = "IV", SmokingHx = "never", conjunction = '|'))
+}
+```
+
+__3b.__ (2 points) Generate all possible tuples for the four variables `Sex`,
+    `SmokingHx`, `CancerStage` and `conjunction` as a matrix with 4
+    columns. The result should be a matrix named `mTuples`. _Oblique hint:_
+    See `?combn`
+
+```{r q3b}
+## mTuples <- ...
+mTuples <- as.matrix(expand.grid(Sex = c(NA, "male", "female"),
+                                 SmokingHx = c(NA, "current", "former", "never"),
+                                 CancerStage = c(NA, "I", "II", "III", "IV"),
+                                 conjunction = c("&", "|"), stringsAsFactors=FALSE))
+```
+
+```{r, error = TRUE}
+## Leave chunk alone
+if (!exists("mTuples") || !is.matrix(mTuples)) {
+    cat("mTuples not found for problem 3b!")
+} else {
+    cat("Dimension of mTuples is", dim(mTuples), "\n")
+}
+```
+
+__3c.__ (1 point) Produce all the filter clauses using the above
+matrix for use with `dplyr`. Remove the trivial and duplicate
+clauses. _Hint:_ `do.call`. The final result after the removal should
+be named `clauses`.
+
+```{r q3c}
+## clauses <- ...
+clauses <- apply(mTuples, 1, function(x) do.call(makeClause, as.list(x)))
+clauses <- unique(grep("TRUE", clauses, invert = TRUE, value = TRUE))
+```
+
+```{r, error = TRUE}
+## Leave chunk alone
+if (!exists("clauses")) {
+    cat("clauses not found for problem 3c!")
+} else {
+    print(head(clauses))
+    print(tail(clauses))
+}
+```
+
+__3d.__ (2 points) Using `lapply` and the variable `clauses`, generate all subsets of
+data corresponding to the clauses. The result should be named `subsets`.
+
+_Hint:_ See examples of lecture code using `parse` and `eval`. You may
+use `subset` or `dplyr` (your choice!), but you have to ensure that
+you name the list of subsets with the clauses so that we know which
+subset corresponds to which clause.
+
+```{r q3d}
+## subsets <- ...
+subsets <- lapply(clauses, function(x) subset(trial, eval(parse(text=x))))
+##subsets <- lapply(clauses, function(x) eval(parse(text = paste("trial %>% filter(",
+##                                                               x, ")"))))
+names(subsets) <- clauses
+```
+
+```{r, error = TRUE}
+## Leave chunk alone
+if (!exists("subsets")) {
+    cat("subsets not found for problem 3d!")
+} else {
+    print(head(lapply(subsets, dim)))
+    print(tail(lapply(subsets, dim)))
+}
+```
+
+
+__3e.__ (1 point) Select generated subsets that have at least 120 subjects in the
+subset. Preserve the names of the subsets. Call the result
+`testableSubsets`.
+
+```{r q3e}
+## testableSubsets <- ...
+kosher <- sapply(subsets, function(x) nrow(x) >= 120)
+testableSubsets <- subsets[kosher]
+```
+
+```{r, error = TRUE}
+## Leave chunk alone
+if (!exists("testableSubsets")) {
+    cat("testableSubsets not found for problem 3e!")
+} else {
+    print(head(lapply(testableSubsets, dim)))
+}
+```
+
+__3f.__ (1 point) For each of these subsets, perform a statistical test to see
+if there is a difference between the proportion of remissions in the
+Drug group versus Placebo (variable `trt`).  Return a vector of
+$p$-values named `pValues` for each subset using a Fisher exact test
+(code below) for each subset `d`. Preserve names.
+
+```{r}
+f <- function(d) {
+    fisher.test(table(d$remission, d$trt))$p.value
+}
+```
+
+```{r q3f}
+## pValues <- ...
+pValues <- sapply(testableSubsets, f)
+```
+
+```{r, error = TRUE}
+## Leave chunk alone
+if (!exists("pValues")) {
+    cat("pValues not found for problem 3f!")
+} else {
+    print(head(pValues))
+    print(tail(pValues))
+}
+```
+
+__3g.__ (1 point) What clauses yield a $p$-value of .10 or less. Your answer
+is expected in the variable `smallPvalues` and the names are expected
+to be clauses.
+
+
+```{r q3g}
+## smallPvalues <- ...
+smallPvalues <- pValues[pValues <= .10]
+```
+
+```{r, error = TRUE}
+## Leave chunk alone
+if (!exists("smallPvalues")) {
+    cat("smallPvalues not found for problem 3g!")
+} else {
+    print(smallPvalues)
+}
+```
+
+

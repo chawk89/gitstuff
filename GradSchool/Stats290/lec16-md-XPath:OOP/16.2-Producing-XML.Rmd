@@ -1,0 +1,325 @@
+---
+title: 16.2. Producing XML
+output:
+     slidy_presentation
+---
+
+```{r, echo = FALSE, message = FALSE}
+## Install a package if not already installed
+installIfNeeded <- function(packages, ...) {
+    toInstall <- packages[!(packages %in% installed.packages()[, 1])]
+    if (length(toInstall) > 0) {
+        install.packages(toInstall, repos = "https://cloud.r-project.org")
+    }
+}
+
+## Ensure packages exist and activate them
+needPackages <- function(packages) {
+    installIfNeeded(packages)
+    for (x in packages) {
+        library(x, character.only = TRUE)
+    }
+}
+needPackages(c("tidyverse", "xml2"))
+```
+
+So far we have talked about _consuming_ XML. How about producing XML?
+
+Nolan and Temple Lang in their book _XML and Web Technologies for Data
+Sciences with R_ (Springer, online for you) show how to exploit
+[KML (Keyhole Markup Language)](https://developers.google.com/kml/documentation/)
+to visualize the migration of elephant seals off Santa Cruz using
+Google Earth.
+
+The data which was gathered by scientists is available in a file
+`elephant.csv` included here.
+
+```
+##
+## Elephant Seal Data
+## From Deb Nolan and Duncan Temple-Lang via Brillinger & Stewart
+##
+"day","lat","lon","date"
+54,34,120,1995-02-23
+55,35,121.3,1995-02-24
+...
+```
+
+___
+
+The basic goal is to load the data and generate XML (KML) for Google
+Earth. I have made some modifications to the original code to make it
+work for me. Also ensure that the `greenBallURL` and `redBallURL`
+refer to files on your system. These are just images used to
+distinguish the stops on outbound and inbound trips.
+
+
+## 16.2.1. Prepare `KML` document
+
+Here is a quick KML summary.
+
+- Root is `kml`.
+- Sole child of `kml` is `Document` with several children
+
+`Document` children are
+- `name` and `description`
+- `Folder` containing the
+    geographic features to be displayed
+- `Folder` contains `Placemark`s which marks a position on earth's surface;
+    simplest is a `Point` with default mark, a yellow
+    pushpin. Children of `Placemark` such as `name`,
+    `description` provide text labels and tooltips
+- `Point` has a `coordinates` child given as comma
+    separated list of latitude, longitude, and elevation
+- `Placemark` also supports geometric features as children,
+    including a `LineString` and `Polygon`. Also
+    `TimeSpan` specifying a begin and end time displaying the
+    placemark
+- `Style` customizes appearance of placemarks; can be
+    defined once and shared
+- `LookAt` element positions the earth at the desired
+    position for viewing
+
+___
+
+```{r}
+esXML <- xml_new_root("kml",
+                      xmlns = c("http://earth.google.com/kml/2.2"))
+```
+
+## 16.2.2. Some notes on how `xml2` works
+
+The most useful functions for generating XML using `xml2` are:
+
+- `xml_children` to get at the child nodes of a given node
+- `xml_add_child` and `xml_add_sibling` to add new children and
+siblings
+- `xml_attrs` to set and query attributes of a node.
+
+We will mostly use `xml_add_child` which takes the name of the node to
+add and its value, followed by name-value pairs that denote
+attributes, if specified. See the vignette in `xml2` for further
+details.
+
+_Note also how the addition of nodes has reference semantics_.
+
+
+```{r}
+doc <- esXML %>% xml_add_child("Document")
+doc
+```
+
+So in the above a child node called `Document` got added and the
+returned value of that expression is the `Document` node, which is
+different from the `esXML` variable (which, of course, got modified).
+
+```{r}
+esXML
+```
+
+Be sure you understand the above reference semantics!
+
+
+## 16.2.3. Construct the KML document
+
+We have to construct the KML file per the defined structure so that
+Google Earth can use it.
+
+We specify the root and with the `Document` node. We a name and
+description to `Document` node.
+
+Then we add the `LookAt` element to position the earth at the desired
+position---our viewport---for viewing. We specify the latitude,
+longitude, altitude, tilt and heading.
+
+```{r}
+doc %>%
+    xml_add_child("name", "Elephant Seal Migration")
+doc %>%
+    xml_add_child("description", "Elephant Seal Migration Data")
+```
+
+We add the viewport to the `Document` node.
+
+```{r}
+lookAt <- doc %>%
+    xml_add_child("LookAt")
+lookAt %>%
+    xml_add_child("longitude", "-135.0")
+lookAt %>%
+    xml_add_child("latitude", "42.0")
+lookAt %>%
+    xml_add_child("altitude", "4100000")
+lookAt %>%
+    xml_add_child("altitudeMode", "absolute")
+lookAt %>%
+    xml_add_child("tilt", "0")
+lookAt %>%
+    xml_add_child("heading", "0")
+
+```
+
+An alternate way of doing this compactly is to use the _tee_ operator
+of `magrittr` that I talked about.
+
+```{r, eval = FALSE}
+lookAt <- doc %T>%
+    xml_add_child("LookAt") %T>%
+    xml_add_child("longitude", "-135.0") %T>%
+    xml_add_child("latitude", "42.0") %T>%
+    xml_add_child("altitude", "4100000") %T>%
+    xml_add_child("altitudeMode", "absolute") %T>%
+    xml_add_child("tilt", "0") %T>%
+    xml_add_child("heading", "0")
+```
+
+## 16.2.4. Specify image files, styles.
+
+We set up local URLs for the image files that will be used to mark
+points along the migration path.
+
+```{r}
+## Change the next two lines to where you keep these png files
+##greenBallURL <- "file:///Users/naras/courses/2017/lectures/lec17/lec17-code/elephant-seals/greenball.png"
+##redBallURL <- "file:///Users/naras/courses/2017/lectures/lec17/lec17-code/elephant-seals/redball.png"
+greenBallURL <- "https://statweb.stanford.edu/~naras/tmp/greenball.png"
+redBallURL <- "https://statweb.stanford.edu/~naras/tmp/redball.png"
+```
+
+Then set up some styles that indicate the ball color, what balloon
+help to provide etc.
+
+```{r}
+style <- doc %>%
+    xml_add_child("Style", id = "green_ball")
+iconStyle <- style %>%
+    xml_add_child("IconStyle")
+iconStyle %>%
+    xml_add_child("scale", "0.5")
+iconStyle %>%
+    xml_add_child("Icon") %>%
+    xml_add_child("href", greenBallURL)
+iconStyle %>%
+    xml_add_child("BalloonStyle") %>%
+    xml_add_child("text", "$[description]")
+
+style <- doc %>%
+    xml_add_child("Style", id = "red_ball")
+iconStyle <- style %>%
+    xml_add_child("IconStyle")
+iconStyle %>%
+    xml_add_child("scale", "0.5")
+iconStyle %>%
+    xml_add_child("Icon") %>%
+    xml_add_child("href", redBallURL)
+iconStyle %>%
+    xml_add_child("BalloonStyle") %>%
+    xml_add_child("text", "$[description]")
+
+```
+
+
+## 16.2.5. Create `Folder` element
+
+`Folder` children of `Document` contain the geographic features to be
+displayed. So create a `Folder` element that will display some
+features hierarchically, mainly `Placemark` and `TimeSpan` for each
+row in the data set.
+
+- `Placemark` marks a position on earth's surface; simplest is a `Point`
+  with default mark, a yellow pushpin.
+
+- Children of `Placemark` such as `name`, `description` provide text
+  labels and tooltips
+
+We are mainly going to draw paths from one point to another.
+
+```{r}
+folder <- doc %>%
+    xml_add_child("Folder")
+
+folder %>%
+    xml_add_child("name", "Elephant Seal")
+```
+
+## 16.2.6. Now process the data
+
+Now comes the part where we process the data, set placemarks using the
+coordinates specified in our data set etc.
+
+
+```{r}
+es <- read_csv("elephant.csv", skip = 4)
+es <- es %>%
+    mutate(color = ifelse(day <= 94, "green_ball", "red_ball"),
+           pathcolor = "ff8adfb2")
+str(es)
+```
+
+We go row by row.
+
+```{r}
+for (i in seq_len(nrow(es))) {
+    ## Create a placemark
+    pm <- folder %>%
+        xml_add_child("Placemark")
+    pm %>%
+        xml_add_child("name", paste("Day", es$day[i]))
+    pm %>%
+        xml_add_child("description", es$date[i])
+    pm %>%
+        xml_add_child("TimeSpan") %>%
+        xml_add_child("begin", es$date[i])
+    pm %>%
+        xml_add_child("styleUrl", paste0("#", es$color[i]))
+    pm %>%
+        xml_add_child("Point") %>%
+        xml_add_child("coordinates",
+                      paste0("-", es$lon[i], ",", es$lat[i], ",0"))
+    ## All paths except last need to be connected
+    if (i < nrow(es) ) {
+        ## Connecting path
+        pm <- folder %>%
+            xml_add_child("Placemark")
+        lineStyle <- pm %>%
+            xml_add_child("Style") %>%
+            xml_add_child("LineStyle")
+        lineStyle %>%
+            xml_add_child("color", es$pathcolor[i])
+        lineStyle %>%
+            xml_add_child("width", "2")
+        pm %>%
+            xml_add_child("TimeSpan") %>%
+            xml_add_child("begin", es$date[i])
+        lineString <- pm %>%
+            xml_add_child("LineString")
+        lineString %>%
+            xml_add_child("tessellate", "1")
+        lineString %>%
+            xml_add_child("extrude", "0")
+        lineString %>%
+            xml_add_child("coordinates",
+                          paste0("-", es$lon[i], ",", es$lat[i], ",0 ",
+                                 "-", es$lon[i + 1], ",", es$lat[i + 1], ",0 "))
+    }
+}
+
+```
+
+
+## 16.2.7. Output the `KML` file
+
+
+```{r}
+write_xml(esXML, file = "es.kml")
+```
+
+We're done: you can now open the file in Google Earth.
+
+
+## 16.2.8. Session Info
+
+```{r}
+sessionInfo()
+```
+

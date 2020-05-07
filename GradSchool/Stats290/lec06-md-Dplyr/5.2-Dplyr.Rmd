@@ -1,0 +1,369 @@
+---
+title: "5.2. Dplyr Facilities"
+output: 
+  slidy_presentation
+---
+```{r, echo = FALSE, results = 'hide', message = FALSE}
+## Install a package if not already installed
+installIfNeeded <- function(packages, ...) {
+    toInstall <- packages[!(packages %in% installed.packages()[, 1])]
+    if (length(toInstall) > 0) {
+        install.packages(toInstall, repos = "https://cloud.r-project.org")
+    }
+}
+
+## Ensure packages exist and activate them
+needPackages <- function(packages) {
+    installIfNeeded(packages)
+    for (x in packages) {
+        library(x, character.only = TRUE)
+    }
+}
+needPackages(c("tidyverse", "nycflights13"))
+```
+
+R provides many functions to do data manipulations, but the package
+`dplyr` has become very popular, because it provides a well-designed
+grammar of data manipulation via a set of _verbs_.
+
+A good data set to illustrate the power of `dplyr` is the US Bureau of
+Transportation Statistics dataset of all 336776 flights that departed
+from New York City in 2013. It is provided as a package
+`nycflights13`.
+
+The examples in this section are directly from the `dplyr` package
+vignette.
+
+```{r}
+library(nycflights13)
+dim(flights)
+head(flights)
+```
+
+The functions in `dplyr` work on tibbles (also data frames) and are
+geared to specific tasks.
+
+___
+
+## 5.2.1. Subset, or select rows
+
+Select of a data set according to some criterion: the `filter` and
+`slice` verbs.
+
+To select all flights on January 1st:
+
+```{r}
+filter(flights, month == 1, day == 1)
+```
+
+In plain R, the equivalents are (note the use of the single
+ampersand!):
+
+```{r, eval = FALSE}
+flights[flights$month == 1 & flights$day == 1, ]
+```
+or
+
+```{r, eval = FALSE}
+subset(flights, month == 1 & day == 1)
+```
+
+To select all flights in January or February:
+
+```{r, eval = FALSE}
+filter(flights, month == 1 | month == 2)
+```
+
+To select specified rows, use `slice`:
+
+```{r}
+slice(flights, 1:6)
+```
+which is equivalent to the R version:
+
+```{r}
+head(flights)
+```
+
+The difference, of course, is that `slice` can get you arbitrary rows,
+not just the head or tail.
+
+## 5.2.2. Reorder the rows
+
+The order of the rows in the data set can be sorted according to one
+or more variables or expressions you construct using `arrange`;
+
+```{r}
+arrange(flights, year, month, day)
+```
+will order the `flights` dataset first by `year`, and within `year` by
+`month` and within `month` by `day`.
+
+Use `desc()` to order a column in descending order:
+
+```{r}
+arrange(flights, desc(arr_delay))
+```
+
+## 5.2.3. Select columns
+
+Often only a few variables in a data frame are of concern for your
+work. The verb `select` allows you to pick them and ignore others.
+
+```{r}
+# Select columns by name
+select(flights, year, month, day)
+# Select all columns between year and day (inclusive)
+select(flights, year:day)
+# Select all columns except those from year to day (inclusive)
+select(flights, -(year:day))
+```
+
+There are a number of helper functions you can use within `select()`,
+like `starts_with()`, `ends_with()`, `matches()` and
+`contains()`. These let you quickly match larger blocks of variables
+that meet some criterion. See `?select` for more details.
+
+You can rename variables with `select()` by using named arguments:
+
+```{r}
+select(flights, tail_num = tailnum)
+```
+
+If instead you want to rename variables in a column (rather than
+select some and drop others), use `rename`:
+
+```{r}
+dplyr::rename(flights, tail_num = tailnum)
+```
+
+## 5.2.4. Extract distinct (unique) rows
+
+Use `distinct()`to find unique values in a table:
+
+```{r}
+distinct(flights, tailnum)
+distinct(flights, origin, dest)
+```
+
+Note how `distinct` only returns the variables specified!
+
+## 5.2.5. Add new columns
+
+Besides selecting sets of existing columns, it's often useful to add
+new (derived) columns that are functions of existing columns.  Enter `mutate`:
+
+```{r}
+mutate(flights,
+  gain = arr_delay - dep_delay,
+  speed = distance / air_time * 60)
+```
+
+In `mutate` you can refer to columns that you've just created (useful
+in intensive computations):
+
+```{r}
+mutate(flights,
+  gain = arr_delay - dep_delay,
+  gain_per_hour = gain / (air_time / 60)
+)
+```
+
+If you only want to keep the new variables (and drop the others) use
+`transmute()`:
+
+```{r}
+transmute(flights,
+  gain = arr_delay - dep_delay,
+  gain_per_hour = gain / (air_time / 60)
+)
+```
+
+## 5.2.6. Summarise values
+
+Summarizing reduces a data frame to a single row:
+
+```{r}
+summarize(flights,
+  delay = mean(dep_delay, na.rm = TRUE))
+```
+
+## 5.2.7. Randomly sample rows
+
+You can use `sample_n()` and `sample_frac()` to take a random sample
+of rows: use `sample_n()` for a fixed number and `sample_frac()` for a
+fixed fraction.
+
+```{r}
+sample_n(flights, 10)
+sample_frac(flights, 0.01)
+```
+
+Use `replace = TRUE` to perform a bootstrap sample. If needed, you can
+weight the sample with the `weight` argument.
+
+## 5.2.8. Commonalities
+
+You may have noticed that the syntax and function of all these verbs
+are very similar:
+
+* The first argument is a tibble or a data frame
+
+* The subsequent arguments describe what to do with the data
+  frame. Notice that you can refer to columns in the data frame
+  directly without using `$`.
+
+* The result is a new tibble or data frame
+
+Together these properties make it easy to chain together multiple
+simple steps, using pipes, to achieve a complex result.
+
+## 5.2.9. Grouped operations
+
+The above verbs are useful on their own, but they become really
+powerful when you apply them to groups of observations within a
+dataset. In dplyr, you do this by with the `group_by()` function. It
+breaks down a dataset into specified groups of rows. When you then
+apply the verbs above on the resulting object they'll be automatically
+applied "by group". Most importantly, all this is achieved by using
+the same exact syntax you'd use with an ungrouped object.
+
+Grouping affects the verbs as follows:
+
+* grouped `select()` is the same as ungrouped `select()`, except that
+  grouping variables are always retained.
+
+* grouped `arrange()` orders first by the grouping variables
+
+* `mutate()` and `filter()` are most useful in conjunction with window
+  functions (like `rank()`, or `min(x) == x`). They are described in detail in
+  `vignette("window-functions")`.
+
+* `sample_n()` and `sample_frac()` sample the specified number/fraction of
+  rows in each group.
+
+* `slice()` extracts rows within each group.
+
+* `summarise()` is powerful and easy to understand, as described in
+  more detail below.
+
+## 5.2.10. Example from `dplyr` vignette
+
+In the following example, we split the complete dataset into
+individual planes and then summarise each plane by counting the number
+of flights (`count = n()`) and computing the average distance (`dist =
+mean(Distance, na.rm = TRUE)`) and arrival delay (`delay =
+mean(ArrDelay, na.rm = TRUE)`). We then use `ggplot2` to display the
+output.
+
+```{r, warning = FALSE, message = FALSE, fig.width = 6}
+flights %>%
+    group_by(tailnum) %>%
+    summarize(count = n(),
+              dist = mean(distance, na.rm = TRUE),
+              delay = mean(arr_delay, na.rm = TRUE)) %>%
+    filter(count > 20, dist < 2000) ->
+    delay
+
+## Interestingly, the average delay is only slightly related to the
+## average distance flown by a plane.
+require(ggplot2, quietly = TRUE)
+ggplot(delay, aes(dist, delay)) +
+    geom_point(aes(size = count), alpha = 1/2) +
+    geom_smooth() +
+    scale_size_area()
+```
+
+___
+
+You use `summarise()` with __aggregate functions__, which take a
+vector of values and return a single number. There are many useful
+examples of such functions in base R like `min()`, `max()`, `mean()`,
+`sum()`, `sd()`, `median()`, and `IQR()`. dplyr provides a handful of
+others:
+
+* `n()`: the number of observations in the current group
+
+* `n_distinct(x)`:the number of unique values in `x`.
+
+* `first(x)`, `last(x)` and `nth(x, n)` - these work
+  similarly to `x[1]`, `x[length(x)]`, and `x[n]` but give you more control
+  over the result if the value is missing.
+
+For example, we could use these to find the number of planes and the
+number of flights that go to each possible destination:
+
+```{r}
+destinations <- group_by(flights, dest)
+summarise(destinations,
+  planes = n_distinct(tailnum),
+  flights = n()
+)
+```
+
+## 5.2.11. Grouping by multiple variables
+
+When you group by multiple variables, each summary peels off one level
+of the grouping. That makes it easy to progressively roll-up a
+dataset:
+
+```{r}
+(daily <- group_by(flights, year, month, day))
+```
+
+We can examine the groups.
+
+```{r}
+groups(daily)
+```
+
+
+```{r}
+(per_day   <- summarise(daily, flights = n()))
+```
+
+```{r}
+groups(per_day)
+```
+
+We lost one level of grouping.
+
+```{r}
+(per_month <- summarise(per_day, flights = sum(flights)))
+```
+
+And another.
+
+```{r}
+groups(per_month)
+```
+
+```{r}
+(per_year  <- summarise(per_month, flights = sum(flights)))
+```
+
+And finally we lose all groups.
+
+```{r}
+groups(per_year)
+```
+
+However you need to be careful when progressively rolling up summaries
+like this: it's ok for sums and counts, but not in general for
+statistical summaries. 
+
+## 5.2.13 Tip
+
+By default, when you print tibbles, you only get a few rows and
+columns. You can force a print of more rows and columns as follows.
+
+```{r}
+daily %>%
+    print(n = 10, width = Inf)
+```
+
+## 5.2.12. Session Info
+```{r}
+sessionInfo()
+```
+

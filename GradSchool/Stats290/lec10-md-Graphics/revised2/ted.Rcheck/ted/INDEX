@@ -1,0 +1,5 @@
+bitly                   The bitly dataset (you should really document
+                        this better!)
+hello                   A simple greeting function
+simple_plot             A simple scatterplot using ggplot2
+ted-package             ted is a simple package with one function

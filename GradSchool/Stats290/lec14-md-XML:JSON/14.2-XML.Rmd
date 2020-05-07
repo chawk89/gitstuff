@@ -1,0 +1,260 @@
+---
+title: 14.2. XML, the eXtensible Markup Language
+output:
+     slidy_presentation
+---
+
+```{r, echo = FALSE}
+installIfNeeded <- function(packages, ...) {
+    toInstall <- setdiff(packages, installed.packages()[, 1])
+    if (length(toInstall) > 0) {
+        install.packages(toInstall, ...)
+    }
+}
+installIfNeeded(c("xml2", "StatDataML"), repos = "https://cloud.r-project.org")
+```
+
+XML represents data in a structured, yet flexible format. It is mostly
+text (unicode) based and plays an important role in data exchange and
+transformation. 
+
+See [WWW consortium](http://www.w3.org/XML). 
+
+It is widely used in communications between servers and clients and is
+a standard for information interchange (serialization). 
+
+Most XML documents are not for human consumption; they are more for
+computation. 
+
+___
+
+What exactly is this format? Let us look at a simple example of XML
+data.
+
+```
+<?xml version="1.0"?>
+<scientist>
+  <name>
+    <first_name>Ronald</first_name>
+    <middle_name>Aylmer</middle_name>
+    <last_name>Fisher</last_name>
+  </name>
+  <dates dob="1890-02-17" dod="1962-07-29" />
+  <profession>statistician</profession>
+  <profession>mathematician</profession>
+  <profession>geneticist</profession>
+</scientist>
+```
+
+- There is a first line that signifies that this is an XML
+  document. We take it, as is.
+- The rest of the data consists of character data or strings.
+- Some strings beginning with angled brackets come in _matched pairs_,
+  indicating _markup tag_, i.e., they enclose a data value between
+  them. Example: `<first_name>` and `</first_name>` are markup tags
+  that enclose a first name. Thus, a program should be able to extract
+  the first name by merely extracting the string between these two
+  tags. Similarly `<scientist>` and `</scientist>` enclose several
+  _children_ (`<name>`, `<dates>`, `<profession>`) and grandchildren
+  tags, namely `<first_name>`, `<middle_name>`, `<last_name>`).
+- One tag, `<dates>`, has no further children and is used in an
+  abbreviated form (ending in `/>`)
+- One tag, `<dates>` has some _attributes_ `dob` and `dod` indicating
+  dates of birth and death
+
+___
+
+Note that XML is really a sort of hierarchical data format with
+arbitrary tags but some strict rules (matched tags, etc.). The tags
+can be conceptually thought of as nodes in a tree with branches
+containing further nodes or terminating in a leaf node. (Indeed, with
+most non-trivial data, we quickly have large and/or bushy trees.)
+
+HyperText Markup Language (or HTML) is also a dialect of XML, except
+that it has a prescribed set of tags and is less strict about rules
+and is also mostly interpreted by browsers.
+
+Despite the fact that one can use arbitary tags in XML and nest them,
+the structure can be made quite precise and therefore programs can
+readily consume and produce them. This accounts for their popularity
+among other things. 
+
+For example, iTunes library used an XML file to [share
+data](https://support.apple.cgom/en-us/HT201610) with other
+applications. everytime you play a song on your iPhone, the file
+`iTunes Music Library.xml` (located under the subfolder `iTunes` of
+`Music` in your home folder on a Mac) is updated with information.
+
+___
+
+## 14.2.2. Viewing XML files
+
+One of the best ways to examine (small) XML files is to use your
+browser. It is important to remember that your browser is more than a
+browser: it is a development tool!
+
+There are also specific addins that make it very easy to understand
+the structure of an XML document. More on that later.
+
+## 14.2.3. XML in R
+
+All (modern) languages provide XML handling capabilities, including
+R. Python has packages such as `ElementTree`, `lxml`, and `Sax` for
+XML processing.  Java has had extensive XML processing from the start;
+`JAXP` is Java API for XML processing; we'll have an opportunity to
+talk a bit about this.
+
+Let us look at an example.
+
+```{r}
+library(tibble)
+d <- tibble(x = LETTERS[seq_len(2L)],
+                y = seq_len(2L),
+                z = seq(1.0, 2.0, by = 1.0))
+d
+```
+
+In R, the package `XML` is a versatile package for handling XML. Many
+packages depend on it and in fact, `StatDataML` is an R package that
+serializes R data objects using XML.
+
+```{r}
+library(StatDataML)
+writeSDML(d, file = "d.xml")
+```
+produces an XML file.  You can read it back and re-construct a `tibble`.
+frame.
+
+```{r, warning = FALSE}
+dCopy <- readSDML("d.xml")
+identical(d, dCopy)
+```
+
+(Any warnings above are due to the fact that the `StatDataML` authors
+need to update their package and not use deprecated functions.)
+
+As you can infer, this offers an opportunity for saving R objects, and
+restoring them back, or even moving them over the wire, for
+example. (With limitations, of course.)
+
+___
+
+## 14.2.4. XML file structure
+
+Basic unit of an XML file is an `element`, also called a `node`.
+
+For every element, there is a start and end tag and they must match
+(unlike HTML which is lax).
+
+- A start tag looks like `<foo>` and an end tag: `</foo>`
+
+- Between an element, other elements can appear or plain data or
+  text or be empty. In the latter case, a short cut can be used:
+  `<foo />` rather than `<foo></foo>`. Otherwise, the content is the
+  _value_ of the node.
+
+- Elements can have attributes:
+```
+<scientist born="1890-02-17" died="1962-07-29">
+Ronald A. Fisher
+</scientist>
+```
+displays a node that has two attributes `born` and `died` with values
+as shown.
+
+- Comments begin with `<!--` and end with `-->`.
+- Sometimes large chunks of character data might be included in an
+  element. It is a chore to recode all the offending characters.
+  Everything in a `CDATA` section is treated as raw character
+  data. More below.
+
+___
+
+The XML specification describes what constitutes XML names (tags as
+well as attributes). They may contain essentially any alphanumeric
+character: `[A-za-z0-9_ .-]` among others. No punctuation characters
+such as quotation marks, apostrophes, dollar signs, carets, percent
+symbols, and semicolons. The colon is allowed, but its use is
+reserved.
+
+The character data inside an element cannot contain an unescaped
+opening angle bracket (`<`). These and other characters can be used
+via entity references thus:
+
+|Entity Reference |   Character                               |
+|:----------------|:------------------------------------------|
+|`&lt;`           | The less-than sign `<`                    |
+|`&amp;`          | The ampersand `&`                         |
+|`&gt;`           | The greater-than sign `>`                 |
+|`&quot;`         | The straight, double quotation mark `"`   |
+|`&apos;`         | The apostrophe `'`                        |
+
+___
+
+## 14.2.5. Character Data
+
+A `CDATA` section is a way of including character data in an XML
+document _literally_. For example, in
+
+```
+<scientist>
+	<name>Ronald Aylmer Fisher</name>
+</scientist>
+```
+
+there are two nested elements, whereas, in
+
+```
+<scientist>
+	<![CDATA[<name>Ronald Aylmer Fisher</name>]]>
+</scientist>
+```
+
+there is only one; equivalent to writing:
+
+```
+<scientist>
+&lt;name&gt;Ronald Aylmer Fisher&lt;/name&gt;
+</scientist>
+```
+
+A variant `PCDATA` stands for parsed character data, data that has
+been parsed for all markup for character data and replaced by actual
+character data. Examined by parser, unlike `CDATA`.
+
+Thus, one can have XML data stuffed inside other XML data etc.
+
+___
+
+## 14.2.7. Document Object Model
+
+An XML document can be naturally thought of as a tree with a root node
+and sub nodes. Such a a way of looking at the XML document is called
+the _Document Object Model Tree_ or DOM tree.
+
+Computing with small to medium amounts XML data usually involves
+working with the DOM tree. In most languages, libraries provide tools
+for performing such computations.
+
+## 14.2.8. XML Summary
+
+- Every start-tag must have a matching end-tag.
+- Elements may nest but may not overlap.
+- There must be exactly one root element.
+- Attribute values must be quoted.
+- An element may not have two attributes with the same name.
+- Comments and processing instructions may not appear inside tags.
+- No unescaped `<` or `&` signs may occur in the
+    character data of an element or attribute.
+- Arbitary data can be stuffed inside `CDATA` sections.
+
+___
+
+## Session Info
+
+Run on `r date()`.
+
+```{r}
+sessionInfo()
+```
+

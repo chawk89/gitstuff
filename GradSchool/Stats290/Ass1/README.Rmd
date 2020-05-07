@@ -1,0 +1,23 @@
+---
+title: 'Stat 290: Assignment 1: Instructions'
+output:
+  html_document:
+    df_print: paged
+---
+
+Follow these instructions _paying full attention to details_ to get
+proper credit.
+
+- Due date: Jan 17, 2020, 23:59:00 hrs.
+- R version 3.6.2 should be used for all exercises.
+- Write your answers (text or code) into the chunks named
+  `q_1a`, `q_2`, `q_4i`, etc.
+- Do not edit or shorten this markdown/notebook file, or rename chunks.
+- You may want to check that you can knit/run and preview the markdown
+  files in Rstudio without error before you enter anything, and, after
+  you enter your answers.
+- Note that the file `totf.txt` must be in the same directory as the
+  associated markdown `ass1-q4.Rmd`.
+- You will submit only the completed `.Rmd` files only as your
+  work on Canvas. Nothing else. 
+

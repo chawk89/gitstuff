@@ -1,0 +1,217 @@
+---
+title: "2.6. Data Import"
+output:
+     slidy_presentation
+---
+
+```{r, echo = FALSE, results = 'hide', message = FALSE}
+## Install a package if not already installed
+installIfNeeded <- function(packages, ...) {
+    toInstall <- packages[!(packages %in% installed.packages()[, 1])]
+    if (length(toInstall) > 0) {
+        install.packages(toInstall, repos = "https://cloud.r-project.org")
+    }
+}
+
+## Ensure packages exist and activate them
+needPackages <- function(packages) {
+    installIfNeeded(packages)
+    for (x in packages) {
+        library(x, character.only = TRUE)
+    }
+}
+needPackages("tidyverse")
+```
+
+Suppose we have a file of pure numbers (univariate data) that we want
+to read into R. For example, assume that the `mpg` data is stored in
+file called [mpg.txt](mpg.txt) literally as shown.
+
+```
+21.0 21.0 22.8 21.4 18.7
+18.1 14.3 24.4 22.8 19.2
+17.8 16.4 17.3 15.2 10.4
+10.4 14.7 32.4 30.4 33.9
+21.5 15.5 15.2 13.3 19.2
+27.3 26.0 30.4 15.8 19.7
+15.0 21.4
+```
+
+Such data can be read into R thus:
+
+
+```{r}
+mpg <- base::scan(file = "./mpg.txt")
+str(mpg)
+```
+
+## 2.6.1. Coding Style Note
+
+When R functions take arguments, it is always a
+good idea to use _named_ arguments where possible as shown above in
+the `scan` invocation.  This is something to be aware of for your
+project.
+
+
+## 2.6.2. Delimited Files
+
+Things get more interesting if data is multivariate or delimited.
+
+- Delimited files (comma / tab) are commonly used to store multivariate data.
+- To read such data correctly into a data frame, the data has to be properly
+structured. For example, each row must have the same number of items
+or some hints have to be provided to handle unusual situations.
+
+It helps to be defensive!
+
+In what follows, we will prefer the package `readr` to handle external
+data rather than what base R provides.
+
+
+### 2.6.3. Mt. Umunhum Rainfall data
+
+The Santa Clara Valley Water District has a number of sensors that
+record rainfall and water levels at reservoirs. The data can be
+downloaded using [their website](http://alert.valleywater.org/).  (The
+site can be down at times!).
+
+- The file [mtumunhum.csv](mtumunhum.csv) contains a comma separated
+file of rainfall during the last 30 days (as of January 08, 2019)
+using the [Water District data
+form](http://alert.valleywater.org/dataAPI/). 
+
+First, we will try to import the dataset into R using RStudio.
+
+
+### 2.6.3.1. Closer inspection
+
+We will use `readr::read_csv` instead of base R's `utils::read.csv`.
+
+```{r}
+library(readr)
+```
+
+The R function `read_csv` in the package `readr` will read a comma
+separated (and other delimited) file and create a `tibble` out of
+it. 
+
+_What is a tibble?_ A modern take on data frames. They behave like
+data frames _mostly_, but are also faster; see this
+[vignette](https://cloud.r-project.org/web/packages/tibble/vignettes/tibble.html)
+and also
+[Chapter 10. Tibbles](https://r4ds.had.co.nz/tibbles.html)
+of _R for Data Science._
+
+Let's try directly.
+
+```{r}
+mtu <- readr::read_csv(file = "./mtumunhum.csv")
+```
+
+```{r}
+str(mtu)
+```
+
+Although `mtu` is a `tibble`, it is not at all what we expected,
+although we got a hint of some problems from the warnings spewed out
+by the `read_csv` invocation.  So this calls for some examination of
+the actual data by reading say the first 25 lines of the file.
+
+```{r}
+readr::read_lines(file = "./mtumunhum.csv", n_max = 25)
+```
+
+Line 22 describes what is being measured.  The actual data starts in
+line 23. Therefore, we need to skip the first 21 lines to get at the
+data. This is all too common a phenomenon, where a file is expected to
+be a comma separated file (because it has a file extension `.csv`) but
+the reality is ruder.
+
+### 2.6.3.2. Second Try
+
+Our second try where we ask `read_csv` to skip the first 21 lines.
+
+```{r}
+mtu <- read_csv(file = "./mtumunhum.csv", skip = 21)
+```
+
+Now things seem much better, so let us see.
+
+```{r}
+str(mtu)
+```
+
+The first few lines.
+
+```{r}
+head(mtu)
+```
+
+__ASIDE__ What one should never do is to edit the file to remove
+problematic lines. Instead handle things in code, so that your
+solution can be employed in a pipeline.
+
+### 2.6.3.4. Difference between `utils::read.csv` and `readr::read_csv`
+
+This is a good point in the discussion to once again
+reiterate some differences between `readr::read_csv` and
+`utils::read.csv`.
+
+```{r}
+mtu2 <- read.csv(file = "./mtumunhum.csv", skip = 21)
+str(mtu2)
+```
+
+Notice several things.
+
+- `utils::read.csv` converted the dates to factors, which is, of
+course, problematic
+- The variable `Date and Time` was automatically renamed! Can you
+  suggest why?
+
+Assuming that these kinds of transformations should be performed by
+default can be troublesome for several reasons.
+
+- They can be expensive when the data is large
+- They may be unnecessary because you may want to do something else
+  with the data
+- They can lead to troublesome code; for example, you may glibly
+  assume that the column names like `Date and Time` will not have
+  spaces when they actually do.
+- You also have limited parsing options for other types of data such
+  as dates and times
+
+_Therefore I recommend using `readr` wherever possible as it is far
+more flexible._
+
+
+## 2.6.4. Plotting rainfall
+
+Once we have the data, of course, we can do many useful things with
+it. That will be the topic of material to follow, but here is a simple
+plot of the cumulative level against date and time.
+
+```{r}
+library(ggplot2)
+ggplot2::qplot(x = `Date and Time (PST)`, y = `Value (in)`, data = mtu)
+```
+
+Of course, we see that there was a good amount of rainfall in the
+first two weeks of January.
+
+## 2.6.5. Save The Data
+
+We might use this data later so we save this version of the data (to
+avoid going through the steps again) for future use in a file
+`mtu.RDS`.
+
+```{r}
+saveRDS(mtu, "./mtu.RDS")
+```
+
+## Session Info
+```{r}
+sessionInfo()
+```
+
+

@@ -1,0 +1,104 @@
+---
+title: 'Stat 290: Assignment 1: Q1'
+output:
+  html_document:
+    df_print: paged
+---
+
+## Q1 (Short answers) [11 pts]
+
+No more than 2 sentences.
+
+In a fresh interactive R session...
+
+__1a__. What does `x = 2` do?
+
+```{r q_1a, eval = FALSE}
+##Assigns the value '2' to the variable 'x' as Type:double for default. The associativity is right-to-left.
+```
+
+__1b__. What does `(x = 5)` do?
+
+```{r q_1b, eval = FALSE}
+##Assigns the variable 'x' to value '5'. The associativity is left-to-right.
+```
+
+__1c__. What does `(x == 2)` do?
+
+```{r q_1c, eval = FALSE}
+##This is a comparison operator (left-to-right associativity) that checks whether the variable 'x' is equal to the double '2'. This returns a boolean value of T/F.
+```
+
+__1d__. What is the difference between  `[` and `[[` subsetting on lists?
+
+```{r q_1d, eval = FALSE}
+##`[[` only returns one element, and `[` may return a list of elements. One bracket give a slice of the data, and double bracket goes deeper to retrieve the most granular element.
+```
+
+__1e__. What's the difference between `&` and `&&`?
+
+```{r q_1e, eval = FALSE}
+##'&&' evaluates and returns a single element (left-to-right associativity), while '&' evaluates and returns multiple elements (ie. vector). 
+```
+
+__1f__. Look up the definition of the function `is.primitive`
+     and explain _precisely_ how it works.
+
+```{r q_1f, eval = FALSE}
+?is.primitive
+is.primitive(typeof(4))
+##evaluates whether an argument is a primitive function by determining whether the function is found at the base package. It then returns a boolean (T/F).
+```
+
+__1g__. How does the `save/load` pair of functions differ from
+`saveRDS/readRDS` pair?
+
+```{r q_1g, eval = FALSE}
+##save/load saves and loads many objects, while `saveRDS/readRDS`only saves one object at a time.
+```
+
+__1h__. Download the source code for R version 3.6.2 from CRAN.  In what file is
+    the source for the R function `readBin` located
+    _relative_ to the top-level directory `R-3.6.2`?
+
+```{r q_1h, eval = FALSE}
+## src > library > base > man
+```
+
+__1i__. Why is the comment `##hence length(what) == 1` correct
+    in the source for the R function `readBin`?
+```{r q_1i, eval = FALSE}
+##These are functions to manipulate connections, and the conditions of  "what" are checked such that !is.character(what) || is.na(what) || length(what) != 1L . This means that length must be 1.
+```
+
+__1j__. What two features of R make arguments such as `as.is=!stringsAsFactors, fill=!blank.lines.skip` work in
+    `read.table` ?
+
+```{r q_1j, eval = FALSE}
+##lazy evaluation and argument matching
+```
+
+__1k__. Explain the result of
+```{r, eval = FALSE}
+f1 <- function(x = {y <- 7; 2}, y = 0) {
+x + y
+print(x)
+print(y)
+}
+f1()
+
+
+```
+in two or three sentences. 
+
+```{r q_1k, eval = FALSE}
+##A custom function is created as 'f1': Variables 'x' and 'y' are added. Variable 'y' is called into scope of the variable 'x' equation and is computed as a variable (default value set to 7). X represents the value 2. The function is called in line #86. Result is 9.
+```
+
+## Session Info
+
+Leave everything below as is.
+
+```{r}
+sessionInfo()
+```

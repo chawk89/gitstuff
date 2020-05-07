@@ -1,0 +1,323 @@
+---
+title: 23.5. Global Variables in Packages
+output:
+     slidy_presentation
+---
+
+One should really try very hard to avoid global variables in
+packages. This is because global variables make code harder to reason
+with; they can can introduce subtle race conditions and therefore
+bugs. Use of global variables in multi-threaded languages will usually
+cause trouble.
+
+___
+
+R is single threaded, that is, it processes one task at a time.
+Together with R's scoping rules, this allows one to get away with
+global variables. In fact, many packages work this way. However,
+global variables are not needed as often as one might think.  Some
+defensible uses of global variables:
+
+- For setting convergence thresholds or numerical tolerances say in a
+numerical routine
+- For setting a maximum number of iterations for a calculation that
+might not terminate
+- For setting default plotting options etc.
+
+## 23.5.1. Example
+
+Consider a test package named `testpack1`. To keep things simple, I have
+introduced a new function:
+
+```{r, eval = FALSE}
+closeEnough <-  function(x, y) {
+    ## check if two numbers are close enough, within testpack1_defaults$tol
+    abs(x - y) <= testpack1_defaults$tol 
+}
+```
+
+Here we have introduced a variable called `testpack1_defaults`, a list
+containing parameter `tol` to judge closeness. You can imagine a
+situation where it might be good to let the user set this option,
+depending on the user's notion of closeness. For example, a user might
+desire `tol = 1e-2` even though we set a value of `tol = 1e-3` as a
+default.
+
+We may have other values too, such as a default number of iterations
+for some numerical routine (`testpack1_defaults$max_iter`)
+
+How and where to define it?
+
+## 23.5.2 Approach 1: Use `options()`
+
+Recall that `options()` is a long list of settings that controls how R
+works. We can use it to store any value we wish. 
+
+In a package, you can do this in any file at the top level; we do it
+in a file called `globals.R`.
+
+```{r, eval = FALSE}
+##
+## contents of file testpack1/R/globals.R
+#' Function to set defaults
+#' @param tol the tolerance, default 1e-3
+#' @param max_iter the maximum number of iterations, default 25
+#' @return a list of option values invisibly
+#' @examples
+#' setDefaults(tol = 1e-5)
+#' getOption("testpack1_defaults")
+#' @export
+setDefaults <- function(tol = 1e-3, max_iter = 25) {
+    result  <- as.list(environment())
+    options(testpack1_defaults = result)
+    invisible(result)
+}
+
+## When package is loaded, ensure that defaults are set
+.onLoad  <- function(libname, pkgname) {
+    setDefaults()
+}
+
+## When package is loaded, ensure that defaults are unset
+.onUnload  <- function(libname, pkgname) {
+    options(testpack1_defaults = NULL)
+}
+```
+
+In the above, we have a function `setDefaults` that has all the
+default parameters we want as arguments. 
+
+The variable `result` gets set to a list of all variables in the
+current environment; recall that `environment()` returns the current
+environment at that point in the function and so will have all the
+passed parameters.
+
+We then set the options and return the result invisibly.
+
+The `.onLoad` and `.unLoad` package hook functions are _crucial_! What
+are those? 
+
+- When a package is _loaded_, `.onLoad` is called, if you define
+it. The `libname` is the directory where the package defining the
+namespace was found. The `pkgname` is the character string giving the
+package name. 
+
+- When a package is _unloaded_, the `.unLoad` function is called, once
+  again with the same arguments as above.
+
+Without `.onLoad`, the defaults would never be set when the package is
+loaded!
+
+___
+
+We can check how the `.onLoad` and `.unLoad` functions work by simply
+loading `testpack`.
+
+First, let us look at our search path.
+
+```{r}
+search()
+```
+We don't have `testpack1` loaded. So let us check on option
+`testpack_defaults`
+
+```{r}
+getOption("testpack1_defaults")
+```
+
+Let us install `testpack1` and load it.
+
+```{r}
+install.packages("testpack1_0.1.tar.gz", type = "source", repos = NULL)
+library(testpack1)
+getOption("testpack1_defaults")
+```
+
+Now `testpack1_defaults` became available. Let us detach it,
+i.e. remove from search path.
+
+```{r}
+detach(2)
+getOption("testpack1_defaults")
+```
+
+Still `testpack1_defaults` is available, because although we removed
+`testpack1`  from search position 2, it is still loaded!
+
+```{r}
+loadedNamespaces()
+```
+
+So let us unload the namespace and check.
+
+```{r}
+unloadNamespace("testpack1")
+getOption("testpack1_defaults")
+```
+
+Indeed the option is now gone.
+
+
+## 23.5.3 Drawback of `options()`
+
+Many package use option variables to operate. However, they are not
+very safe. For, consider the following.
+
+```{r}
+library(testpack1)
+example(closeEnough)
+```
+
+But now let's be mischievous. 
+
+```{r}
+## Clobber the testpack1_defaults option
+options(testpack1_defaults = NULL)
+example(closeEnough)
+```
+
+Although the code does not throw a error, it is wrong!
+
+The root cause: we have more than one way of setting options which
+means we do not have full control of the variable!
+
+Another drawback is that the `setDefaults` function is a bit rigid: we
+cannot change only one value of the parameter while keeping the
+previous value for others. 
+
+## 23.5.4 Approach 2: Using own list (Recommended!)
+
+Maintain your own list of options.
+
+This is outlined in `testpack2` in the file `testpack2/R/globals.R`.
+
+```{r, eval = FALSE}
+##
+## Global variable for package testpack
+##
+testpack2_defaults  <- list(tol = 1e-3, max_iter = 25)
+
+#' Function to set defaults
+#' @param tol the tolerance, default 1e-3
+#' @param max_iter the maximum number of iterations, default 25
+#' @return a list of default values invisibly
+#' @examples
+#' (resetDefaults())
+#' (resetDefaults(tol = 1e-5))
+#' @export
+resetDefaults <- function(tol = 1e-3, max_iter = 25) {
+    testpack2_defaults  <- as.list(environment())
+    invisible(testpack2_defaults)
+}
+
+#' Set the default param name to a value
+#'
+#' @param name the parameter name
+#' @param value the value to assign
+#' @return the new list of defaults invisibly
+#' @examples
+#' (setDefaults("tol", 1e-5))
+#' (setDefaults("max_iter", 100))
+#' @export
+setDefaults <- function(name, value) {
+    ## check if param name is known!
+    if (!(name %in% names(testpack2_defaults))) {
+        stop(sprintf("Bad parameter name %s", name))
+    }
+    testpack2_defaults[[name]]  <- value
+    invisible(testpack2_defaults)
+}
+
+```
+
+___
+
+Again, we start by installing the package and make sure this new
+approach works.
+
+```{r}
+install.packages("testpack2_0.1.tar.gz", type = "source", repos = NULL)
+library(testpack2)
+testpack2::closeEnough(1.01, 1.02) ## FALSE per default tolerance
+setDefaults("tol", .1) ##
+testpack2::closeEnough(1.01, 1.02) ## TRUE per set tolerance
+```
+
+## 23.5.3. A more involved example
+
+In the `disctomp` package, we have several `shiny` apps that ease the
+task of defining a computation, uploading it to an `opencpu` server,
+etc.
+
+Consider for example, the task of defining a computation. One does
+this via `defineNewComputation()`.  The task of this function is to
+first let a user choose a computation from a list of available ones
+and then, based on the choice get the appropriate inputs via another
+shiny app tailored for that choice. For example, with `distcomp` one
+chooses a type of computation first. Then based on that computation,
+you get further parameters you _specific to that choice.__
+
+```{r, eval = FALSE}
+library(distcomp)
+defineNewComputation()
+```
+
+___
+
+The easiest way to do this in R is via environments in any one of your
+R files in the package at the top level.
+
+```{r, eval = FALSE}
+pkgGlobals <- new.env( parent=emptyenv())
+```
+
+You need the `parent` argument to be the empty environment because you
+want the _enclosing environment_ to be empty. Typically, you'll be
+looking for variables in this environment and you don't want to find
+something of the same name in some enclosing environment.
+
+Then you can set up `set` and `get` methods to pick of variables you
+want.
+
+```{r}
+pkgSetGlobal <- function(name, value) {
+  pkgGlobals[[name]] <- value
+}
+pkgGetGlobal <- function(name) {
+  pkgGlobals[[name]]
+}
+```
+
+Note that the return value in the latter might be `NULL`.
+
+In the `distcomp` application, what happens is
+
+1. the global variable gets set for the type of computation
+2. the currently running `shiny` app is stopped, and returns the
+   value of the chosen computation
+3. A new appropriate `shiny` app is fired up based on the chosen
+   computation type and makes use of the global variables
+
+## 23.5.4. Caution
+
+It is easy to get carried away with this in `shiny` because you may
+have several UI elements react to certain global values being set. To
+see this, consider what happens when a UI button is pressed.
+
+Suppose that when the button is pressed, you update a global variable
+and then have several other UI elements change their
+appearance. However, you cannot guarantee the order in which
+
+1. the global variable will be updated
+2. those UI elements will be updated.
+
+So you should really think very carefully about using global
+variables.
+
+## Session Information
+```{r}
+sessionInfo()
+```
+
+
+

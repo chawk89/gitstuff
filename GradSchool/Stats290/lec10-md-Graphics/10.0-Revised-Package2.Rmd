@@ -1,0 +1,131 @@
+---
+title: "10.0. Revised R Package"
+output:
+     slidy_presentation
+---
+
+```{r, echo = FALSE}
+## Install a package if not already installed
+installIfNeeded <- function(packages, ...) {
+    toInstall <- packages[!(packages %in% installed.packages()[, 1])]
+    if (length(toInstall) > 0) {
+        install.packages(toInstall, repos = "https://cloud.r-project.org")
+    }
+}
+
+## Ensure packages exist and activate them
+needPackages <- function(packages) {
+    installIfNeeded(packages)
+    for (x in packages) {
+        library(x, character.only = TRUE)
+    }
+}
+needPackages("devtools")
+```
+
+## 10.0.1. Revising our package again
+
+We are now going to make more changes to our revised package.
+
+## 10.0.1. Add a data set
+
+We will use the bitly dataset. Assuming that you are in the correct
+package directory, you can specify a data set as part of your package
+as follows. 
+
+```{r, eval = FALSE}
+bitly  <- readRDS("bitly.RDS")
+usethis::use_data(bitly)
+```
+
+Notice what changes this makes to the package source files and folders.
+
+## 10.0.2. Adding a plotting function
+
+Let us add a very simple scatterplot function using the `ggplot2`
+package. We first announce our intention by ensuring that the
+`DESCRIPTION` file, which indicates the imports and dependencies is
+appropriately modified. 
+
+```{r, eval = FALSE}
+usethis::use_package("ggplot2", type = "Imports")
+```
+
+___
+
+Let us add a very simple scatterplot function by putting the following
+code in `basicplot.R` in the R subdirectory of the package.
+
+```{r, eval = FALSE}
+simple_plot  <- function(x, y) {
+    ggplot() +
+        geom_point(mapping = aes(x = x, y = y))
+}
+```
+
+___
+
+We would like to make this available to our package users.  So we
+better document it and export it!
+
+```{r, eval = FALSE}
+#' A simple scatterplot using ggplot2
+#' 
+#' @param x the abscissa values
+#' @param y the ordinate values
+#' @return a ggplot object
+#' @examples
+#' simple_plot(mtcars$wt, mtcars$mpg)
+#' @export simple_plot
+simple_plot  <- function(x, y) {
+    ggplot2::ggplot() +
+        ggplot2::geom_point(mapping = ggplot2::aes(x = x, y = y))
+}
+```
+
+___
+
+However, that documentation is not sufficient. We have not told R that
+this plotting function relies on specific functions from `ggplot2`!
+
+So we actually need to indicate this via:
+
+```{r, eval = FALSE}
+#' A simple scatterplot using ggplot2
+#' 
+#' @param x the abscissa values
+#' @param y the ordinate values
+#' @return a ggplot object
+#'
+#' @importFrom ggplot2 ggplot geom_point aes
+#' @examples
+#' simple_plot(mtcars$wt, mtcars$mpg)
+#' @export simple_plot
+simple_plot  <- function(x, y) {
+    ggplot2::ggplot() +
+        ggplot2::geom_point(mapping = ggplot2::aes(x = x, y = y))
+}
+```
+
+## 10.0.3. Build and check
+
+Now we can `devtools::document()`, `devtools::build()` and
+`devtools::check()`.
+
+I do these via command lines. 
+
+## 10.0.4. Important Note
+
+I want to strongly iterate that it is not uncommon to run into issues
+that cannot always be solved neatly via `devtools` or Rstudio IDE.
+
+_You must be willing to get your hands dirty._
+
+This means completely mastering the organization of R packages.  It is
+worth the effort!
+
+
+## Session Info
+```{r}
+sessionInfo()
+```

@@ -1,0 +1,481 @@
+---
+title: "25.2 Reticulate and Keras"
+output: slidy_presentation
+---
+
+The R package `reticulate` allows you to call python from R. 
+
+Keras is a high-level neural networks API developed with a focus on
+enabling fast experimentation. It was primarily written by Francois
+Chollet (Google) in python.
+
+The R package `keras` allows one to interface with the python Keras
+API and is authored by J.J. Allaire (Rstudio).  Key features of Keras
+are:
+
+- Allows the same code to run on CPU or on GPU, seamlessly.
+
+- User-friendly API which makes it easy to quickly prototype deep learning models.
+
+- Built-in support for convolutional networks (for computer vision),
+  recurrent networks (for sequence processing), and any combination of
+  both.
+
+- Allows for use of multiple backends `Tensorflow`, `Theano`, `CNTK`,
+  etc., although we will only focus on tensorflow.
+
+Since `keras` R package makes use of the python interface
+(`reticulate`) and associated (R and python) packages (`tensorflow`
+and `keras`), it is best to ensure that all these packages are
+installed together to ensure that they work harmoniously.
+
+
+## 25.2.1. Installation
+
+The requirements are: 
+
+- A recent python 3 installation. Anaconda works best and if you
+  already have this, you can try using your existing installation.
+
+- R packages `keras` which will install all the dependencies.
+
+So first install the `keras` package as usual. On Macs, for python 3.7
+and tensorflow 2.1, I had to install the latest Rstudio github
+version, not the one from CRAN! See below in the Mac section.
+
+I provide guidance below, but I should note that Anaconda provides
+some R tools that may conflict with what you need for your project or
+Rstudio. So beware!
+
+## 25.2.2. Try first
+
+On Windows, I can only vouch for the detailed instructions I provide
+below, so skip to that.
+
+On Macs, load the `keras` package in R and try installing all
+pre-requisites using `keras::install_keras()` function.  It may or may
+not work. 
+
+I find that this fails with the recent versions of Anaconda because of
+version conflicts. At least when I went through the complete exercise
+for this class on both Macs and Windows, Tensorflow required python
+3.6 whereas Anaconda was distributing version 3.7 in their latest
+distribution.
+
+## 25.2.3. Detailed Instructions
+
+### 25.2.3.1 MacOS
+
+The main issue is that tensorflow and keras are continuously updated
+causing problems if you use the recommended procedure. At the time of
+this writing, the latest version of tensorflow is version 2.1, which
+is what I use.
+
+We assume that a reasonably current conda distribution installation is
+already available (conda 4.8.2, at the time of this writing). If not,
+go ahead and install it from the link.
+
+This also meant that I had to use the latest version of `keras`, not
+on CRAN. Install from the Rstudio github repo.
+
+```{r, eval = FALSE}
+remotes::install_github("rstudio/keras")
+```
+
+In R, the `keras::install_keras()` command creates a virtual
+environment named `r-reticulate` (or `r-tensorflow` in previous
+versions) we will create that environment manually, setting things up
+appropriately. Before we do that, if you had tried the standard
+approach and failed, it is best to start by removing this
+environment. So, in a terminal, first execute:
+
+```{bash, eval = FALSE}
+conda remove --name r-reticulate --all
+```
+
+to get rid of any vestiges of the old installation.  Note that the
+version of python can matter, particularly because tensorflow may be
+available only for certain versions (3.7 in what follows).
+
+Then execute the commands below in a terminal.
+
+```{bash, eval = FALSE}
+conda create -n r-reticulate pip python=3.7
+conda activate r-reticulate
+pip install tensorflow keras tensorflow-hub pandas datacommons
+conda deactivate
+```
+
+Now, you should be able to run the initial MNIST example at [Keras
+Rstudio](https://keras.rstudio.com) site. 
+
+The version of tensorflow installed might produce warnings (lines
+beginning with the letter `I`) but they will not stop you from running
+code. Basically, the warnings indicate that tensorflow may not be able
+to fully use all the features of your CPU that could yield substantial
+speed gains.
+
+```{bash, eval = FALSE}
+conda create -n r-tensorflow pip python=3.7
+conda activate r-tensorflow
+pip install tensorflow
+pip install keras
+conda deactivate
+```
+
+Then test that tensorflow works as follows. 
+
+```{r, eval = FALSE}
+> library(tensorflow)
+> tf$constant("Hello Tensorflow")
+2020-03-03 12:44:40.778242: I tensorflow/core/platform/cpu_feature_guard.cc:142] Your CPU supports instructions that this TensorFlow binary was not compiled to use: AVX2
+tf.Tensor(b'Hello Tensorflow', shape=(), dtype=string)
+```
+
+We simply set a tensorflow string constant to see if the connections
+to python all work. 
+
+___
+
+
+### 25.2.3.2 Windows
+
+Windows installation has gotten better with the use of Miniconda. The
+following session output should help you. Note that this automatically
+ensures that matched versions of tensorflow and python are used,
+version 2.0 and 3.6 respectively.
+
+
+```{r, eval = FALSE}
+> install.packages("keras")
+Installing package into 'C:/Users/naras/R/win-library/3.6'
+(as 'lib' is unspecified)
+also installing the dependencies 'rappdirs', 'reticulate', 'tensorflow'
+
+trying URL 'https://cran.rstudio.com/bin/windows/contrib/3.6/rappdirs_0.3.1.zip'
+Content type 'application/zip' length 87341 bytes (85 KB)
+downloaded 85 KB
+
+trying URL 'https://cran.rstudio.com/bin/windows/contrib/3.6/reticulate_1.14.zip'
+Content type 'application/zip' length 1724937 bytes (1.6 MB)
+downloaded 1.6 MB
+
+trying URL 'https://cran.rstudio.com/bin/windows/contrib/3.6/tensorflow_2.0.0.zip'
+Content type 'application/zip' length 154421 bytes (150 KB)
+downloaded 150 KB
+
+trying URL 'https://cran.rstudio.com/bin/windows/contrib/3.6/keras_2.2.5.0.zip'
+Content type 'application/zip' length 3947050 bytes (3.8 MB)
+downloaded 3.8 MB
+
+package 'rappdirs' successfully unpacked and MD5 sums checked
+package 'reticulate' successfully unpacked and MD5 sums checked
+package 'tensorflow' successfully unpacked and MD5 sums checked
+package 'keras' successfully unpacked and MD5 sums checked
+
+The downloaded binary packages are in
+	C:\Users\naras\AppData\Local\Temp\RtmpycQ9hB\downloaded_package
+> library(keras)
+> library(tensorflow)
+> install_tensorflow()
+No non-system installation of Python could be found.
+Would you like to download and install Miniconda?
+Miniconda is an open source environment management system for Python.
+See https://docs.conda.io/en/latest/miniconda.html for more details.
+
+Would you like to install Miniconda? [Y/n]: 
+* Downloading "https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe" ...
+trying URL 'https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe'
+Content type 'application/octet-stream' length 53999144 bytes (51.5 MB)
+downloaded 51.5 MB
+
+* Installing Miniconda -- please wait a moment ...
+Collecting package metadata (current_repodata.json): ...working... done
+Solving environment: ...working... done
+
+## Package Plan ##
+
+  environment location: C:\Users\naras\AppData\Local\R-MINI~1
+
+  added / updated specs:
+    - conda
+
+
+The following packages will be downloaded:
+
+    package                    |            build
+    ---------------------------|-----------------
+    asn1crypto-1.3.0           |           py37_0         164 KB
+    ca-certificates-2020.1.1   |                0         125 KB
+    certifi-2019.11.28         |           py37_0         154 KB
+    cffi-1.14.0                |   py37h7a1dbc1_0         223 KB
+    conda-4.8.2                |           py37_0         2.8 MB
+    openssl-1.1.1d             |       he774522_4         4.8 MB
+    pip-20.0.2                 |           py37_1         1.7 MB
+    pycosat-0.6.3              |   py37he774522_0          75 KB
+    pyopenssl-19.1.0           |           py37_0          91 KB
+    pywin32-227                |   py37he774522_1         5.5 MB
+    requests-2.22.0            |           py37_1          92 KB
+    ruamel_yaml-0.15.87        |   py37he774522_0         269 KB
+    setuptools-45.2.0          |           py37_0         528 KB
+    six-1.14.0                 |           py37_0          27 KB
+    sqlite-3.31.1              |       he774522_0         637 KB
+    tqdm-4.42.1                |             py_0          56 KB
+    urllib3-1.25.8             |           py37_0         170 KB
+    vs2015_runtime-14.16.27012 |       hf0eaf9b_1         1.1 MB
+    wheel-0.34.2               |           py37_0          66 KB
+    ------------------------------------------------------------
+                                           Total:        18.6 MB
+
+The following packages will be UPDATED:
+
+  asn1crypto                                   1.2.0-py37_0 --> 1.3.0-py37_0
+  ca-certificates                              2019.10.16-0 --> 2020.1.1-0
+  certifi                                  2019.9.11-py37_0 --> 2019.11.28-py37_0
+  cffi                                1.13.0-py37h7a1dbc1_0 --> 1.14.0-py37h7a1dbc1_0
+  conda                                       4.7.12-py37_0 --> 4.8.2-py37_0
+  openssl                                 1.1.1d-he774522_3 --> 1.1.1d-he774522_4
+  pip                                         19.3.1-py37_0 --> 20.0.2-py37_1
+  pyopenssl                                   19.0.0-py37_0 --> 19.1.0-py37_0
+  pywin32                                223-py37hfa6e2cd_1 --> 227-py37he774522_1
+  requests                                    2.22.0-py37_0 --> 2.22.0-py37_1
+  ruamel_yaml                        0.15.46-py37hfa6e2cd_0 --> 0.15.87-py37he774522_0
+  setuptools                                  41.4.0-py37_0 --> 45.2.0-py37_0
+  six                                         1.12.0-py37_0 --> 1.14.0-py37_0
+  sqlite                                  3.30.0-he774522_0 --> 3.31.1-he774522_0
+  tqdm                                          4.36.1-py_0 --> 4.42.1-py_0
+  urllib3                                     1.24.2-py37_0 --> 1.25.8-py37_0
+  vs2015_runtime                     14.16.27012-hf0eaf9b_0 --> 14.16.27012-hf0eaf9b_1
+  wheel                                       0.33.6-py37_0 --> 0.34.2-py37_0
+
+The following packages will be DOWNGRADED:
+
+  pycosat                              0.6.3-py37hfa6e2cd_0 --> 0.6.3-py37he774522_0
+
+
+
+Downloading and Extracting Packages
+wheel-0.34.2         | 66 KB     | ########## | 100% 
+vs2015_runtime-14.16 | 1.1 MB    | ########## | 100% 
+pycosat-0.6.3        | 75 KB     | ########## | 100% 
+certifi-2019.11.28   | 154 KB    | ########## | 100% 
+requests-2.22.0      | 92 KB     | ########## | 100% 
+sqlite-3.31.1        | 637 KB    | ########## | 100% 
+pywin32-227          | 5.5 MB    | ########## | 100% 
+pyopenssl-19.1.0     | 91 KB     | ########## | 100% 
+ruamel_yaml-0.15.87  | 269 KB    | ########## | 100% 
+urllib3-1.25.8       | 170 KB    | ########## | 100% 
+tqdm-4.42.1          | 56 KB     | ########## | 100% 
+conda-4.8.2          | 2.8 MB    | ########## | 100% 
+pip-20.0.2           | 1.7 MB    | ########## | 100% 
+openssl-1.1.1d       | 4.8 MB    | ########## | 100% 
+ca-certificates-2020 | 125 KB    | ########## | 100% 
+asn1crypto-1.3.0     | 164 KB    | ########## | 100% 
+six-1.14.0           | 27 KB     | ########## | 100% 
+setuptools-45.2.0    | 528 KB    | ########## | 100% 
+cffi-1.14.0          | 223 KB    | ########## | 100% 
+Preparing transaction: ...working... done
+Verifying transaction: ...working... done
+Executing transaction: ...working... done
+Collecting package metadata (current_repodata.json): ...working... done
+Solving environment: ...working... done
+
+## Package Plan ##
+
+  environment location: C:\Users\naras\AppData\Local\R-MINI~1\envs\r-reticulate
+
+  added / updated specs:
+    - numpy
+    - python=3.6
+
+
+The following packages will be downloaded:
+
+    package                    |            build
+    ---------------------------|-----------------
+    blas-1.0                   |              mkl           6 KB
+    certifi-2019.11.28         |           py36_0         154 KB
+    icc_rt-2019.0.0            |       h0cc432a_1         6.0 MB
+    intel-openmp-2020.0        |              166         1.5 MB
+    mkl-2020.0                 |              166        98.9 MB
+    mkl-service-2.3.0          |   py36hb782905_0         210 KB
+    mkl_fft-1.0.15             |   py36h14836fe_0         118 KB
+    mkl_random-1.1.0           |   py36h675688f_0         233 KB
+    numpy-1.18.1               |   py36h93ca92e_0           6 KB
+    numpy-base-1.18.1          |   py36hc3f5095_1         3.8 MB
+    pip-20.0.2                 |           py36_1         1.7 MB
+    python-3.6.10              |       h9f7ef89_0        15.9 MB
+    setuptools-45.2.0          |           py36_0         528 KB
+    six-1.14.0                 |           py36_0          27 KB
+    wheel-0.34.2               |           py36_0          66 KB
+    wincertstore-0.2           |   py36h7fe50ca_0          14 KB
+    ------------------------------------------------------------
+                                           Total:       129.2 MB
+
+The following NEW packages will be INSTALLED:
+
+  blas               pkgs/main/win-64::blas-1.0-mkl
+  certifi            pkgs/main/win-64::certifi-2019.11.28-py36_0
+  icc_rt             pkgs/main/win-64::icc_rt-2019.0.0-h0cc432a_1
+  intel-openmp       pkgs/main/win-64::intel-openmp-2020.0-166
+  mkl                pkgs/main/win-64::mkl-2020.0-166
+  mkl-service        pkgs/main/win-64::mkl-service-2.3.0-py36hb782905_0
+  mkl_fft            pkgs/main/win-64::mkl_fft-1.0.15-py36h14836fe_0
+  mkl_random         pkgs/main/win-64::mkl_random-1.1.0-py36h675688f_0
+  numpy              pkgs/main/win-64::numpy-1.18.1-py36h93ca92e_0
+  numpy-base         pkgs/main/win-64::numpy-base-1.18.1-py36hc3f5095_1
+  pip                pkgs/main/win-64::pip-20.0.2-py36_1
+  python             pkgs/main/win-64::python-3.6.10-h9f7ef89_0
+  setuptools         pkgs/main/win-64::setuptools-45.2.0-py36_0
+  six                pkgs/main/win-64::six-1.14.0-py36_0
+  sqlite             pkgs/main/win-64::sqlite-3.31.1-he774522_0
+  vc                 pkgs/main/win-64::vc-14.1-h0510ff6_4
+  vs2015_runtime     pkgs/main/win-64::vs2015_runtime-14.16.27012-hf0eaf9b_1
+  wheel              pkgs/main/win-64::wheel-0.34.2-py36_0
+  wincertstore       pkgs/main/win-64::wincertstore-0.2-py36h7fe50ca_0
+
+
+
+Downloading and Extracting Packages
+numpy-base-1.18.1    | 3.8 MB    | ########## | 100% 
+icc_rt-2019.0.0      | 6.0 MB    | ########## | 100% 
+wincertstore-0.2     | 14 KB     | ########## | 100% 
+intel-openmp-2020.0  | 1.5 MB    | ########## | 100% 
+wheel-0.34.2         | 66 KB     | ########## | 100% 
+six-1.14.0           | 27 KB     | ########## | 100% 
+blas-1.0             | 6 KB      | ########## | 100% 
+mkl-2020.0           | 98.9 MB   | ########## | 100% 
+certifi-2019.11.28   | 154 KB    | ########## | 100% 
+mkl_fft-1.0.15       | 118 KB    | ########## | 100% 
+numpy-1.18.1         | 6 KB      | ########## | 100% 
+mkl_random-1.1.0     | 233 KB    | ########## | 100% 
+pip-20.0.2           | 1.7 MB    | ########## | 100% 
+setuptools-45.2.0    | 528 KB    | ########## | 100% 
+python-3.6.10        | 15.9 MB   | ########## | 100% 
+mkl-service-2.3.0    | 210 KB    | ########## | 100% 
+Preparing transaction: ...working... done
+Verifying transaction: ...working... done
+Executing transaction: ...working... done
+#
+# To activate this environment, use
+#
+#     $ conda activate r-reticulate
+#
+# To deactivate an active environment, use
+#
+#     $ conda deactivate
+
+* Miniconda has been successfully installed at "C:/Users/naras/AppData/Local/r-miniconda".
+Collecting package metadata (current_repodata.json): ...working... done
+Solving environment: ...working... done
+
+# All requested packages already installed.
+
+Collecting tensorflow==2.0.0
+  Downloading tensorflow-2.0.0-cp36-cp36m-win_amd64.whl (48.1 MB)
+Collecting termcolor>=1.1.0
+  Downloading termcolor-1.1.0.tar.gz (3.9 kB)
+Collecting gast==0.2.2
+  Downloading gast-0.2.2.tar.gz (10 kB)
+Collecting astor>=0.6.0
+  Downloading astor-0.8.1-py2.py3-none-any.whl (27 kB)
+Collecting grpcio>=1.8.6
+  Downloading grpcio-1.27.2-cp36-cp36m-win_amd64.whl (2.0 MB)
+Collecting tensorboard<2.1.0,>=2.0.0
+  Downloading tensorboard-2.0.2-py3-none-any.whl (3.8 MB)
+Collecting keras-preprocessing>=1.0.5
+  Downloading Keras_Preprocessing-1.1.0-py2.py3-none-any.whl (41 kB)
+Collecting google-pasta>=0.1.6
+  Downloading google_pasta-0.1.8-py3-none-any.whl (57 kB)
+Collecting absl-py>=0.7.0
+  Downloading absl-py-0.9.0.tar.gz (104 kB)
+Collecting tensorflow-estimator<2.1.0,>=2.0.0
+  Downloading tensorflow_estimator-2.0.1-py2.py3-none-any.whl (449 kB)
+Requirement already satisfied, skipping upgrade: six>=1.10.0 in c:\users\naras\appdata\local\r-mini~1\envs\r-reti~1\lib\site-packages (from tensorflow==2.0.0) (1.14.0)
+Collecting keras-applications>=1.0.8
+  Downloading Keras_Applications-1.0.8-py3-none-any.whl (50 kB)
+Requirement already satisfied, skipping upgrade: numpy<2.0,>=1.16.0 in c:\users\naras\appdata\local\r-mini~1\envs\r-reti~1\lib\site-packages (from tensorflow==2.0.0) (1.18.1)
+Collecting wrapt>=1.11.1
+  Downloading wrapt-1.12.0.tar.gz (27 kB)
+Collecting protobuf>=3.6.1
+  Downloading protobuf-3.11.3-cp36-cp36m-win_amd64.whl (1.1 MB)
+Collecting opt-einsum>=2.3.2
+  Downloading opt_einsum-3.2.0-py3-none-any.whl (63 kB)
+Requirement already satisfied, skipping upgrade: wheel>=0.26 in c:\users\naras\appdata\local\r-mini~1\envs\r-reti~1\lib\site-packages (from tensorflow==2.0.0) (0.34.2)
+Collecting requests<3,>=2.21.0
+  Downloading requests-2.23.0-py2.py3-none-any.whl (58 kB)
+Collecting google-auth-oauthlib<0.5,>=0.4.1
+  Downloading google_auth_oauthlib-0.4.1-py2.py3-none-any.whl (18 kB)
+Collecting werkzeug>=0.11.15
+  Downloading Werkzeug-1.0.0-py2.py3-none-any.whl (298 kB)
+Collecting google-auth<2,>=1.6.3
+  Downloading google_auth-1.11.2-py2.py3-none-any.whl (76 kB)
+Collecting markdown>=2.6.8
+  Downloading Markdown-3.2.1-py2.py3-none-any.whl (88 kB)
+Requirement already satisfied, skipping upgrade: setuptools>=41.0.0 in c:\users\naras\appdata\local\r-mini~1\envs\r-reti~1\lib\site-packages (from tensorboard<2.1.0,>=2.0.0->tensorflow==2.0.0) (45.2.0.post20200210)
+Collecting h5py
+  Downloading h5py-2.10.0-cp36-cp36m-win_amd64.whl (2.4 MB)
+Collecting chardet<4,>=3.0.2
+  Downloading chardet-3.0.4-py2.py3-none-any.whl (133 kB)
+Collecting urllib3!=1.25.0,!=1.25.1,<1.26,>=1.21.1
+  Downloading urllib3-1.25.8-py2.py3-none-any.whl (125 kB)
+Requirement already satisfied, skipping upgrade: certifi>=2017.4.17 in c:\users\naras\appdata\local\r-mini~1\envs\r-reti~1\lib\site-packages (from requests<3,>=2.21.0->tensorboard<2.1.0,>=2.0.0->tensorflow==2.0.0) (2019.11.28)
+Collecting idna<3,>=2.5
+  Downloading idna-2.9-py2.py3-none-any.whl (58 kB)
+Collecting requests-oauthlib>=0.7.0
+  Downloading requests_oauthlib-1.3.0-py2.py3-none-any.whl (23 kB)
+Collecting pyasn1-modules>=0.2.1
+  Downloading pyasn1_modules-0.2.8-py2.py3-none-any.whl (155 kB)
+Collecting cachetools<5.0,>=2.0.0
+  Downloading cachetools-4.0.0-py3-none-any.whl (10 kB)
+Collecting rsa<4.1,>=3.1.4
+  Downloading rsa-4.0-py2.py3-none-any.whl (38 kB)
+Collecting oauthlib>=3.0.0
+  Downloading oauthlib-3.1.0-py2.py3-none-any.whl (147 kB)
+Collecting pyasn1<0.5.0,>=0.4.6
+  Downloading pyasn1-0.4.8-py2.py3-none-any.whl (77 kB)
+Building wheels for collected packages: termcolor, gast, absl-py, wrapt
+  Building wheel for termcolor (setup.py): started
+  Building wheel for termcolor (setup.py): finished with status 'done'
+  Created wheel for termcolor: filename=termcolor-1.1.0-py3-none-any.whl size=4835 sha256=b243fef19031d80e2b2125dea3dfd325aeaf213d3909ec75798129ef42e14456
+  Stored in directory: c:\users\naras\appdata\local\pip\cache\wheels\93\2a\eb\e58dbcbc963549ee4f065ff80a59f274cc7210b6eab962acdc
+  Building wheel for gast (setup.py): started
+  Building wheel for gast (setup.py): finished with status 'done'
+  Created wheel for gast: filename=gast-0.2.2-py3-none-any.whl size=7547 sha256=23c5ada048cabe8b3e5e51ac20273cd4021e62544f8a7c47d2c548b8063d6bcf
+  Stored in directory: c:\users\naras\appdata\local\pip\cache\wheels\19\a7\b9\0740c7a3a7d1d348f04823339274b90de25fbcd217b2ee1fbe
+  Building wheel for absl-py (setup.py): started
+  Building wheel for absl-py (setup.py): finished with status 'done'
+  Created wheel for absl-py: filename=absl_py-0.9.0-py3-none-any.whl size=121935 sha256=421e1661aede423e7e252c9b406a3816c28e03dc57d31ed3d09411a915c90636
+  Stored in directory: c:\users\naras\appdata\local\pip\cache\wheels\c3\af\84\3962a6af7b4ab336e951b7877dcfb758cf94548bb1771e0679
+  Building wheel for wrapt (setup.py): started
+  Building wheel for wrapt (setup.py): finished with status 'done'
+  Created wheel for wrapt: filename=wrapt-1.12.0-cp36-cp36m-win_amd64.whl size=37488 sha256=72edff547b9fa613fb66a88350a58f3cf1ce8faa6a4e161e40b512c32071a6ac
+  Stored in directory: c:\users\naras\appdata\local\pip\cache\wheels\d6\61\05\e03fa5094273d241c17ab2a0b774027a6e167870275e93bf25
+Successfully built termcolor gast absl-py wrapt
+Installing collected packages: termcolor, gast, astor, grpcio, absl-py, chardet, urllib3, idna, requests, pyasn1, pyasn1-modules, cachetools, rsa, google-auth, oauthlib, requests-oauthlib, google-auth-oauthlib, werkzeug, markdown, protobuf, tensorboard, keras-preprocessing, google-pasta, tensorflow-estimator, h5py, keras-applications, wrapt, opt-einsum, tensorflow
+  WARNING: The script chardetect.exe is installed in 'C:\Users\naras\AppData\Local\R-MINI~1\envs\R-RETI~1\Scripts' which is not on PATH.
+  Consider adding this directory to PATH or, if you prefer to suppress this warning, use --no-warn-script-location.
+  WARNING: The scripts pyrsa-decrypt.exe, pyrsa-encrypt.exe, pyrsa-keygen.exe, pyrsa-priv2pub.exe, pyrsa-sign.exe and pyrsa-verify.exe are installed in 'C:\Users\naras\AppData\Local\R-MINI~1\envs\R-RETI~1\Scripts' which is not on PATH.
+  Consider adding this directory to PATH or, if you prefer to suppress this warning, use --no-warn-script-location.
+  WARNING: The script google-oauthlib-tool.exe is installed in 'C:\Users\naras\AppData\Local\R-MINI~1\envs\R-RETI~1\Scripts' which is not on PATH.
+  Consider adding this directory to PATH or, if you prefer to suppress this warning, use --no-warn-script-location.
+  WARNING: The script markdown_py.exe is installed in 'C:\Users\naras\AppData\Local\R-MINI~1\envs\R-RETI~1\Scripts' which is not on PATH.
+  Consider adding this directory to PATH or, if you prefer to suppress this warning, use --no-warn-script-location.
+  WARNING: The script tensorboard.exe is installed in 'C:\Users\naras\AppData\Local\R-MINI~1\envs\R-RETI~1\Scripts' which is not on PATH.
+  Consider adding this directory to PATH or, if you prefer to suppress this warning, use --no-warn-script-location.
+  WARNING: The scripts saved_model_cli.exe, tensorboard.exe, tf_upgrade_v2.exe, tflite_convert.exe, toco.exe and toco_from_protos.exe are installed in 'C:\Users\naras\AppData\Local\R-MINI~1\envs\R-RETI~1\Scripts' which is not on PATH.
+  Consider adding this directory to PATH or, if you prefer to suppress this warning, use --no-warn-script-location.
+Successfully installed absl-py-0.9.0 astor-0.8.1 cachetools-4.0.0 chardet-3.0.4 gast-0.2.2 google-auth-1.11.2 google-auth-oauthlib-0.4.1 google-pasta-0.1.8 grpcio-1.27.2 h5py-2.10.0 idna-2.9 keras-applications-1.0.8 keras-preprocessing-1.1.0 markdown-3.2.1 oauthlib-3.1.0 opt-einsum-3.2.0 protobuf-3.11.3 pyasn1-0.4.8 pyasn1-modules-0.2.8 requests-2.23.0 requests-oauthlib-1.3.0 rsa-4.0 tensorboard-2.0.2 tensorflow-2.0.0 tensorflow-estimator-2.0.1 termcolor-1.1.0 urllib3-1.25.8 werkzeug-1.0.0 wrapt-1.12.0
+
+Installation complete.
+```
+
+Then test as follows.
+
+```{r, eval = FALSE}
+> library(tensorflow)
+> tf$constant("Hellow Tensorflow")
+
+2020-03-03 12:44:40.778242: I tensorflow/core/platform/cpu_feature_guard.cc:142] Your CPU supports instructions that this TensorFlow binary was not compiled to use: AVX2
+tf.Tensor(b'Hellow Tensorflow', shape=(), dtype=string)
+```

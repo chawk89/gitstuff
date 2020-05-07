@@ -1,0 +1,180 @@
+---
+title: 'Stat 290: Assignment 3: Q1'
+output:
+  html_document:
+    df_print: paged
+---
+
+## 1. XML and JSON Processing
+
+The [iTunes](https://rss.itunes.apple.com/us) website lists the top
+selling audiobooks, podcasts, etc. in the Apple store. We provide here
+a data set of the top 100 podcasts in XML (`top100.xml`) and JSON
+(`top100.json`) format. This exercise will lead you through the
+process of creating a tidy data set with columns for the name of the
+podcast, artist, and categories.
+
+__1a.__ (2 points) Read in the XML file into a variable `xml_doc` and
+ensure that the namespace is changed to use `im` for `im` and `w3` for
+the default `d1`. Save the namespace variable in `ns` for use later.
+_Hint_: See `?xml2::xml_ns_rename`
+
+```{r q1a}
+## Your answer here
+library(dplyr)
+library(xml2)
+library(magrittr)
+library(tidyr)
+
+
+xml_doc <- read_xml("~/Downloads/ass-3/top100.xml")
+
+##chack all namespaces from document
+#xml_ns(xml_doc)
+
+##change namespaces
+ns <- xml_ns_rename(xml_ns(xml_doc), d1 = "w3", im = "im")
+ns
+```
+
+__1b.__ (2 points) Using Xpath, extract the entries in the xml data set as a
+nodeset named `entries`. You should have exactly 100 entries.
+
+```{r q1b}
+## Your answer here
+entries <- xml_find_all(xml_doc, "//w3:entry", ns)
+entries 
+```
+?xpath
+
+__1c.__ (4 points) Complete the function below to extract contents of xml
+nodes. The `nodeset` is an argument that can be treated like a list
+and your result will be a list. Use this function to extract entry
+podcast name into `names` and entry artists into `artists`.
+
+_Hint_: use Xpaths relative to the nodeset.
+
+```{r q1c}
+#' @param nodeset the list of nodes as a nodeset
+#' @param ns the namespace object
+#' @param xpath the path specifying the node element
+#' @return a list of the text content of the nodes
+extract_nodeset_contents <- function(nodeset, ns, xpath) {
+  
+  xml_find_all(nodeset,xpath = xpath, ns)  %>%
+  xml_contents %>%
+  xml_text
+  
+}
+## Use to extract names and artists
+## When I did not use a relative XPath, I returned an additional title outside of "entries" scope. Why is that?
+names <- extract_nodeset_contents(entries, ns, ".//w3:title")
+names
+artists <- extract_nodeset_contents(entries, ns, ".//im:artist")
+artists
+
+```
+
+__1d.__ (4 points) Complete the function below to extract artibutes of xml
+nodes. The `nodeset` is an argument that can be treated like a list
+and your result will be a list. Use this function to extract entry ids
+into `entry_ids` and entry categories into `categories`.
+
+_Hint_: use Xpaths relative to the nodeset.
+
+```{r q1d}
+#' @param nodeset the list of nodes as a nodeset
+#' @param ns the namespace object
+#' @param xpath the path specifying the node element
+#' @param attribute the name of the attribute to extract
+#' @return a list of the attribute values of the nodes
+extract_nodeset_attribute <- function(nodeset, ns, xpath, attribute) {
+    
+    xml_find_all(nodeset, xpath = xpath, ns)  %>%
+    xml_attr(attribute) 
+}
+
+
+
+
+
+
+## Use to extract entry ids and categories
+entry_ids <- extract_nodeset_attribute(entries, ns=ns, xpath=".//w3:id", "id")
+entry_ids
+
+#Keep categories associated with entry_ids, then rep entry id's with each category
+##lapply should return a list of the same length as X
+categories <- lapply(entries,function(x) extract_nodeset_attribute(x,ns=ns, xpath = ".//w3:category", "label"))
+categories
+
+
+##process list of lists, mapply, repeat the ID
+
+
+
+
+```
+
+__1e.__ (3 points) Construct a tidy data set named `top100XML` with
+the character columns `entry_id`, `category`, `name`, `artist`, in
+that order. Arrange by `category` within `entry_id`. _Hint_: Use two
+tibbles and join. you might find functions `rep`, `mapply` useful.
+
+```{r q1e}
+
+
+
+
+##create a list of lengths
+
+sequence=0
+i=1
+for (i in 1:length(categories)){
+  sequence[i] = (length(categories[[i]]))
+  i+1
+}
+cat_ids <- mapply(rep, times = sequence, entry_ids)
+
+
+#Step 1: create tibble for entry id, names, and artists
+#Step 2: create tibble for entry id, category by using mapply(rep, times = 1:4, x = 5:1)
+#Step 3: join
+
+##answer
+artist_tibble <- tibble(entry_id = entry_ids, name = names, artist = artists)
+category_tibble <- tibble(entry_id = unlist(cat_ids), category = unlist(categories))
+
+
+top100XML <- inner_join(artist_tibble,category_tibble) %>%
+  select(entry_id, category, name, artist) %>%
+  arrange(entry_id, category)
+```
+
+__1f.__ (5 points) Construct a `top100JSON` tidy dataset using the
+JSON version of the data. You should get get pretty much the same
+result as `top100XML` if you arrange your columns exactly the
+same. 
+
+```{r q1f}
+
+library(jsonlite)
+
+
+json_doc <- fromJSON("~/Downloads/ass-3/top100.json")
+
+top100JSON <- data.frame(json_doc) %>%
+  unnest(col = c(feed.results.genres)) %>% 
+  select(entry_id = feed.results.id, category = name, name = feed.results.name, artist = feed.results.artistName) %>%
+  arrange(entry_id, category)
+
+
+
+```
+
+## Session Info
+
+Leave as is.
+```{r}
+sessionInfo()
+```

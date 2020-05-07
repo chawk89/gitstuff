@@ -1,0 +1,473 @@
+---
+title: 17.2. S4 Classes
+output: slidy_presentation
+---
+
+```{r, eval = TRUE, echo = FALSE, message = FALSE}
+## Install a package if not already installed
+installIfNeeded <- function(packages, ...) {
+    toInstall <- packages[!(packages %in% installed.packages()[, 1])]
+    if (length(toInstall) > 0) {
+        install.packages(toInstall, repos = "https://cloud.r-project.org")
+    }
+}
+
+## Ensure packages exist and activate them
+needPackages <- function(packages) {
+    installIfNeeded(packages)
+    for (x in packages) {
+        library(x, character.only = TRUE)
+    }
+}
+needPackages("tidyverse")
+```
+
+S4 classes are more formal than S3, in that you explicitly define
+classes with _slots_ (for object variables) and _methods_ for the
+objects.
+
+[Bioconductor](https://bioconductor.org) makes extensive use of `S4`
+classes.
+
+The S4 system provides _functional_ OOP.
+
+---
+
+## 17.2.1 S4 Tools
+
+The two main programming tools are
+
+- `setClass()` to define a class of objects and
+- `setMethod()` to define methods for a function, corresponding to
+  classes for one or more arguments.
+
+Both these are programming tools that store the definitions; calls to
+them should be in the source code for a package.
+
+Think of them like the Python `class` and `def` statements, as part of the
+language. (See Chapters 9 and 10 of Chambers Software for Data
+Analysis.)
+
+---
+
+To create a new class definition:
+```
+setClass(Class, slots = , contains = )
+```
+
+where `Class` is the named for the new class, `slots` is a named list
+of the classes for the slots and `contains` is a vector of one or more
+inherited classes.
+
+In lecture 12, Prof. Chambers showed a `track` class implemented in
+S4.
+
+```{r}
+track <- setClass("track",
+                  slots = c(lat = "numeric", long = "numeric", time = "Date"))
+```
+
+This class has separate slots for the variables (`lat`, `long`,
+   `time`). For example, you may consider defining specialized classes
+   even for latitude and longitude!
+
+---
+
+## 17.2.2. A Complete Example of S4
+
+We'll create a class to represent a stock object along with data about
+its ticker symbol and prices.
+
+```{r}
+setClass("Stock", representation(symbol = "character",
+                                 data = "data.frame")
+         )
+```
+
+We've defined a simple class with two slots. So we can construct this
+object and print it out.
+
+```{r}
+s <- new("Stock")
+s
+```
+
+The printed representation (result of the default `show` method) is
+not very appealing. Better to define a `show` method to print it
+(`show` is a generic).
+
+___
+
+```{r}
+show
+```
+
+Here is our `show` method for our `Stock` class. Note the use of the
+`signature` that indicates that this `show` method applies to our
+`Stock` class.
+
+```{r}
+setMethod(f = "show", signature = "Stock",
+          definition = function(object) {
+              cat(sprintf("Stock Symbol: %s \n", object@symbol))
+              if (nrow(object@data) > 0) {
+                  cat(sprintf("%d prices\n", nrow(object@data)))
+              } else {
+                  cat("No data in object slots.\n")
+              }
+          })
+```
+
+We can try it.
+
+```{r}
+s
+```
+
+___
+
+
+A stock class with some data.
+
+```{r}
+s <- new("Stock", symbol = "JUNK",
+         data = data.frame(price = rnorm(10, mean = 200, sd = 5),
+                           date = as.Date(Sys.Date()) - 1:10))
+```
+
+Print it out.
+
+```{r}
+s
+```
+
+___
+
+Maybe we want to have some default data in the constructor. Let us
+use some random data. (You can pull in `AAPL` stock for the last 10
+days if that makes sense in your application or something like that.)
+
+```{r}
+setClass("Stock", representation(symbol = "character",
+                                 data = "data.frame"),
+         prototype = prototype (
+             symbol = "JUNK",
+             data = data.frame(price = rnorm(10, mean = 100, sd = 5),
+                               date = as.Date(Sys.Date()) - 1:10))
+         )
+```
+
+Now, if you use the constructor without data, you'll get the default
+object.
+
+```{r}
+s2 <- new("Stock")
+s2
+```
+
+___
+
+## 17.2.3. Slots
+
+Fields in the object are called _slots_ and are accessed using the `@`
+symbol. You can get info about slots using the following functions.
+
+```{r}
+slotNames("Stock")
+getSlots("Stock")
+```
+
+
+```{r}
+s2@symbol
+str(s2@data)
+```
+
+The above (using the `@` symbol) is not a good way to work with
+slots. In object oriented programming, one creates accessor and
+modifier functions to deal with object properties. So once again we
+need _methods_.
+
+___
+
+### 17.2.3.1. First Attempt
+
+One would think the following would do the trick, following on our
+previous example of `show`
+
+```{r, error = TRUE}
+setMethod("getSymbol", "Stock",
+          function(object) object@symbol
+          )
+```
+
+But that doesn't work because R does not know of any generic function
+called `getSymbol`.  The `setMethod` assumes you are defining a method
+for a _generic_ function.  (See `?setMethod`)
+
+___
+
+### 17.2.3.2. Correct Way 
+
+Therefore, the following incantation is standard.
+
+```{r}
+setGeneric("getSymbol", function(object) standardGeneric("getSymbol") )
+setMethod("getSymbol", "Stock",
+          function(object) object@symbol
+          )
+```
+
+_That is, you make a generic function, and then define a method for
+the generic._
+
+
+Now let's try using it.
+
+```{r}
+getSymbol(s2)
+```
+
+This leads to an interesting situation. What happens if you, as a
+user, have imported a package that already contains a generic named
+`getSymbol`? (You'll get a warning that things are masked. That's ok.)
+
+___
+
+
+Setting the value of a slot proceeds similarly, except now note the
+`value` argument.
+
+```{r}
+setGeneric("setSymbol", function(object, value) standardGeneric("setSymbol") )
+setMethod("setSymbol", "Stock",
+          function(object, value) object@symbol <- value
+          )
+```
+
+Does it work? Let us see.
+
+```{r}
+setSymbol(s2, "FOO")
+s2
+```
+
+Hmmm, nothing changed. Why?  Because for setting, we need _reference_
+semantics!
+
+___
+
+We have to use a special construct, a _replacement_ function we
+discussed in an earlier lecture.
+
+```{r}
+rm("setSymbol")
+setGeneric("setSymbol<-", function(object, value) standardGeneric("setSymbol<-") )
+setReplaceMethod(f = "setSymbol",
+                 signature = "Stock",
+                 definition = function(object, value) {
+                     object@symbol <- value
+                     object
+                 })
+```
+
+Notice the information R provides back. Now let us try.
+
+
+```{r}
+setSymbol(s2) <- "FOO"
+s2
+```
+
+Ditto for slot `data`.
+
+```{r}
+setGeneric("getData", function(object) standardGeneric("getData") )
+setMethod("getData", "Stock",
+          function(object) object@data
+          )
+
+setGeneric("setData<-", function(object, value) standardGeneric("setData<-") )
+setReplaceMethod(f = "setData",
+                 signature = "Stock",
+                 definition = function(object, value) {
+                     object@data <- value
+                     object
+                 })
+```
+
+The modified object _has to be returned_ as the value of the function
+definition.
+
+In the above, we are setting slot values without verifying its
+contents. We can do better.
+
+___
+
+## 17.2.4. The `validity` method
+
+Often, when one sets data in an object slot, one would like to perform
+some sanity checks so that there are no inconsistencies.
+
+You can define a validity method for a class at any time, either
+during its definition by using `validity` parameter or defining a
+function and later adding it using `setValidity`. We'll do the
+latter.
+
+```{r}
+stockValidity <- function(object) {
+    retVal <- NULL
+    if (!is.data.frame(object@data)) {
+        retVal <- c(retVal, "Data slot is not a data frame!")
+    }
+    dfNames <- sort(names(object@data))
+    expectedNames <- c("date", "price")
+    if (length(expectedNames) != length(dfNames) ||
+        !all.equal(expectedNames, dfNames)) {
+        retVal <- c(retVal, "Names mismatch")
+    }
+    stockSymbol <- object@symbol
+    if ((!is.character(stockSymbol)) || (length(stockSymbol) != 1L) ||
+        (nchar(stockSymbol) == 0)) {
+        retVal <- c(retVal, "Bad Stock Symbol")
+    }
+    if (is.null(retVal))
+        TRUE
+    else
+        retVal
+}
+setValidity("Stock", stockValidity)
+```
+
+Let's now check is `s2` is valid.
+
+```{r}
+validObject(s2)
+```
+___
+
+We can even reuse this in the `setData` and `setSymbol` functions.
+
+```{r}
+setReplaceMethod(f = "setSymbol",
+                 signature = "Stock",
+                 definition = function(object, value) {
+                     object@symbol <- value
+                     validObject(object)
+                     object
+                 })
+
+setReplaceMethod(f = "setData",
+                 signature = "Stock",
+                 definition = function(object, value) {
+                     object@data <- value
+                     validObject(object)
+                     object
+                 })
+```
+
+Let us now try it.
+
+```{r, error = TRUE}
+setSymbol(s2) <- NULL
+setSymbol(s2) <- ""
+```
+
+In case you are wondering, note that `s2` is not modified!
+
+```{r}
+s2
+```
+
+___
+
+## 17.2.5. Initialization
+
+The `S4` object system provides a way for you to define your own
+initialization function.  For example, we might use the above
+validation in our initialization as follows.
+
+```{r, eval = FALSE}
+setMethod("initialize", "Stock",
+          function (.Object, symbol, data) {
+              if (missing(symbol) || missing(data)) {
+                  stop("Symbol and data required")
+              }
+              .Object@symbol <- symbol
+              .Object@data <- data
+              validObject(.Object)
+              .Object
+          })
+```
+
+It is common to use validity functions in the initialization also.
+
+___
+
+## 17.2.6. Plotting
+
+Let us do something more useful and define a plot method, that will
+plot the data using `ggplot2::qplot`.
+
+```{r, error = TRUE}
+library(ggplot2)
+setMethod("plot", "Stock",
+          function(object) {
+              data <- object@data
+              qplot(data$date, data$price, data = data, geom = "line")
+          })
+```
+
+
+Note that there is no need to declare `plot` a generic since `plot` is
+already so.
+
+This does not work. Because plot takes arguments `x` and `y`. So have
+to redefine using those parameters!
+
+```{r}
+setMethod("plot", "Stock",
+          function(x, y, ...) {
+              data <- x@data
+              qplot(data$date, data$price, data = data, geom = "line")
+          })
+```
+
+Now we can use it.
+
+```{r}
+plot(s2)
+```
+___
+
+## 17.2.7. S4 in Packages
+
+Packages that use S4 classes must import all of `methods`. They should
+also export the classes they define. The Roxygen tag for this is
+`@exportClass`.
+
+I have included an example package utilizing the stock S4 example for
+you. 
+
+___
+
+## 17.2.8. References and Suggested Reading
+
+Chapter 10 of Extending R is a complete introduction to this OOP
+paradigm.
+
+Another readable reference I have found is _A (Not So) Short
+Introduction to S4_ by Christophe Genolini. Google it.
+
+For S4 in packages, Hadley Wickham's `Advanced R` has tips on
+documentation.
+
+___
+
+## 17.2.9. Session Info
+
+```{r}
+sessionInfo()
+```
+
+

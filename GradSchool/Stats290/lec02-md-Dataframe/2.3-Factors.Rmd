@@ -1,0 +1,96 @@
+---
+title: "2.3. Factors"
+output:
+     slidy_presentation
+---
+
+Factors are a useful way to encode categorical variables or a set of
+ordered variables (ordered factors). Internally, they are represented
+as integers with attributes.
+
+They are important because many R functions use a modeling language (a
+domain specific language) to describe the model. Examples include
+`lm`, `glm` etc. When you use a factor in a model expression, R can
+construct the dummy variables automatically in fitting the models.
+
+```{r}
+rating <- factor(c("abysmal", "middling", "exceptional"))
+levels(rating)
+subRating <- rating[1:2]
+subRating
+```
+
+Examine the attributes.
+
+```{r}
+attributes(rating)
+```
+
+Now let us mess with the attributes.
+
+```{r}
+attributes(rating) <- NULL
+rating
+typeof(rating)
+```
+
+Notice how `subRating` is still a factor with the original factor
+levels in the code chunk above. 
+
+```{r}
+subRating
+```
+
+Thus, erroneous assignments to the factor variable will be
+flagged with a warning. A value of `NA` is, of course, ok.
+
+```{r, error = TRUE}
+subRating[3] <- "foo"  ## error
+subRating[4] <- "bar"
+subRating
+subRating[3:5] <- "abysmal" ## ok
+```
+
+To create a brand new factor that only has two levels, use the `drop`
+argument.
+
+```{r}
+newSubRating <- rating[1:2, drop=TRUE]
+newSubRating
+```
+
+One can specify levels explicitly; here's a factor with one value, but
+all levels specified.
+
+```{r}
+rating2 <- factor("exceptional",
+                  levels = c("abysmal", "middling", "exceptional"))
+rating2
+```
+
+Such factor considerations raise their head in cross-validation,
+distributed computing etc. This is because the validation set may
+differ from the training set in the number of levels available. So,
+maintaining the levels is crucial so that the generated dummy
+variables are correct. That can be forced.
+
+Also note that by default, `NA` values are excluded in the factor
+construction. There are times when you may want to keep it.
+
+```{r}
+factor(c(letters[1:3], NA), exclude = NULL)
+```
+
+## 2.3.1. Ordered factor
+
+```{r}
+rating3 <- factor(c("exceptional", "middling"),
+                  levels = c("abysmal", "middling", "exceptional"),
+                  ordered = TRUE)
+rating3
+```
+
+## Session Info
+```{r}
+sessionInfo()
+```

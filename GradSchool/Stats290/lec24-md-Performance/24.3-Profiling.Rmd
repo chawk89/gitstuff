@@ -1,0 +1,168 @@
+---
+title: 24.3. Profiling R code
+output:
+     slidy_presentation
+---
+
+```{r, echo = FALSE}
+installIfNeeded <- function(packages, ...) {
+    installedPackages <- installed.packages()[, 1]
+    toInstall <- setdiff(packages, installedPackages)
+    if (length(toInstall) > 0) install.packages(toInstall, ...)
+}
+installIfNeeded(c("proftools", "profvis", "pryr"), repos = "https://cloud.r-project.org")
+```
+
+There are several approaches to profiling R code to see where the
+bottlenecks are.
+
+## 24.3.1. The `Rprof` function
+
+The command `Rprof` controls profiling. At a specified time interval
+(default 20 microseconds) , records which R function is being used
+and writes output to a file.
+
+The results can be summarized using `summaryRprof` or by
+using `R CMD Rprof` on the command line.
+
+For example, here is a bootstrap invocation.
+
+```{r}
+## In this example we show the use of boot in a prediction from
+## regression based on the nuclear data.  This example is taken
+## from Example 6.8 of Davison and Hinkley (1997).  Notice also
+## that two extra arguments to 'statistic' are passed through boot.
+library(boot)
+load("nuke.RData")
+nuke.fun
+```
+
+We can profile this function via:
+
+```{r}
+Rprof("boot.out") ## will save profiling info in boot.out
+results <- boot(nuke.data, nuke.fun, R = 999, m = 1,
+                fit.pred = new.fit, x.pred = new.data)
+
+Rprof(NULL) ## stop profiling
+```
+
+You can now summarize the results with `summaryRprof`, see the
+documentation `?summaryRprof`.
+
+```{r}
+m <- summaryRprof("boot.out") ## will summarize
+m
+```
+
+You can also generate a call graph using `proftools` library. _But it
+appears to be broken at this point!_
+
+
+```{r, eval = FALSE}
+library(proftools)
+plotProfileCallGraph(readProfileData("boot.out"))
+```
+
+Another option is to do memory profiling via `Rprofmem`, but this
+requires that R be compiled with certain capabilities (default on
+windows and Macs).
+
+```{r}
+capabilities("profmem")
+```
+
+## 24.3.2. The `profvis` package
+
+```{r}
+library(profvis)
+profvis({
+    results <- boot(nuke.data, nuke.fun, R = 999, m = 1,
+                    fit.pred = new.fit, x.pred = new.data)
+})
+
+```
+
+A larger example of this is available online; see the [Getting Faster
+Results with CVXR](http://cvxr.rbind.io/post/examples/cvxr_speed/)
+tutorial.
+
+
+## 24.3.3. Tracing Memory
+
+What happens to `x` in the code below?
+
+```{r}
+x <- 1:5
+x[2] <- 9
+```
+
+1. The value of `x` is changed in place.
+2. A copy of `x` is made to a new location, the modification is made,
+and then `x` is made to point to the new location.
+
+R will do both of these depending on the situation. If `x` is by
+itself, the modification in place makes sense.
+
+However, if other variables are referring to `x`, then R will copy `x`
+and make the modification as in 2.
+
+___
+
+The function `tracemem` allows you to look at when copying happens. It
+is more useful in conjunction with the function `pryr::address`.
+
+```{r}
+library(pryr)
+a <- 1:10
+address(a)
+tracemem(a)
+b <- a
+address(b)
+```
+
+In the above, `a` and `b` share memory. Now let us change `b`.
+
+```{r}
+b[1] <- 2
+```
+So the copying happens only when `b` is changed. First, `b` gets
+copied so that it is a replica of `a`. Then `b`'s value gets changed
+and so another copy happens.
+
+
+```{r}
+d <- data.frame(x = NULL, y = NULL)
+tracemem(d)
+for (i in seq(5)) {
+    d[i, "x"] <- i
+}
+untracemem(d)
+```
+
+Above, copying happens the first time.
+
+___
+
+The following is surprising...
+
+
+```{r}
+d <- data.frame(x = numeric(5), y = numeric(5))
+tracemem(d)
+for (i in seq_len(5)) {
+    d$x[i] <- i
+}
+untracemem(d)
+```
+
+Because `x` is changed, the attributes have also to be modified. That
+is, row names must be set! So a whole bunch of copying happens.
+
+
+## 24.3.4. Session Info
+
+```{r}
+sessionInfo()
+```
+

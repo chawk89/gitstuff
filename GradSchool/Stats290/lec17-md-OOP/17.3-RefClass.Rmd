@@ -1,0 +1,153 @@
+---
+title: 17.3. Reference Classes
+output: slidy_presentation
+---
+
+Reference Classes (aka R5) offer a means of implementing encapsulated
+OOP in R.  This is discussed in detail in chapter 11 of `Extending R`
+by John Chambers.
+
+We'll provide a brief synopsis using the same example as before.
+
+## 17.3.1. Defining Reference Classes
+
+Use `setRefClass` to define an _object generator_ function.
+
+```{r}
+stockGenerator <- setRefClass("Stock",
+                              fields = list(symbol = "character",
+                                            data = "data.frame")
+         )
+```
+
+Now you can instantiate:
+
+```{r}
+s <- stockGenerator$new()
+s
+```
+
+## 17.3.2. Field access and modification
+
+You can replace field values using the `$` operator.
+
+```{r}
+s$symbol <- "JUNK"
+s
+```
+
+Notice that these are reference semantics and you get it for free with
+reference classes without any real effort. However, this is generally
+considered bad form, and so you would like accessor and modifer
+functions.
+
+Convenience methods generate this for your automatically. For example,
+the invocation
+
+```{r}
+stockGenerator$accessors("symbol", "data")
+```
+
+automatically generates functions called `setSymbol`, `getSymbol`,
+`setData`, `getData` as can be seen below.
+
+
+```{r}
+s <- stockGenerator()
+s$setSymbol("JUNK2")
+s
+s$getSymbol()
+```
+
+
+## 17.3.3. Other Methods
+
+You can write methods for Reference classes easily usng the `$` syntax.
+
+```{r}
+stockGenerator$methods(resetStockSymbol = function() {
+    symbol <<- ""
+})
+
+s <- stockGenerator()
+s$setSymbol("JUNK3")
+s
+s$resetStockSymbol()
+s
+```
+
+Note the use of the `<<-` above. This is necessary to obtain the
+reference semantics.
+
+You can also write an initialization method.
+
+```{r}
+stockGenerator$methods(initialize = function(symbol, data) {
+    ## Some validity checks can be directly made
+    if (missing(symbol)) {
+        symbol <<- "JUNK"
+    } else {
+        symbol <<- symbol
+    }
+    if (missing(data)) {
+        data = data.frame(price = rnorm(10, mean = 100, sd = 5),
+                          date = as.Date(Sys.Date()) - 1:10)
+    } else {
+        data <<- data
+    }
+})
+```
+
+And a plot method.
+
+```{r}
+require(ggplot2)
+stockGenerator$methods(plot = function() {
+    qplot(data$date, data$price, data = data, geom = "line")
+})
+```
+
+
+## 17.3.4. General Comments
+
+Reference classes are useful when reference semantics are needed, as
+they are in encapsulated OOP. Beware that you're required to use the
+`<<-` assignment to achieve it in your methods.
+
+For example, a common mistake is to do something like:
+
+```{r, eval = FALSE}
+person <- setRefClass("Person",
+                      fields = list(lastName = "character",
+                                    firstName = "character"),
+                      methods = list(
+                          resetLastName = function() {
+                              lastName <- "No Last Name"
+                          },
+                          doSomethingMore <- function() {
+                              ##...
+                          }
+                      ))
+```
+
+The `setRefClass` is smart enough to catch some of these and ask you
+if you really wanted to use `<<-` versus `<-`. But the second can
+yield an error message that is not very informative.
+
+
+Also, I find that the package
+[`R6`](http://cran.rstudio.com/web/packages/R6/vignettes/Introduction.html)
+by Winston Chang, is another take on this idea and has become quite
+popular. It has a number of vignettes that are very easy to follow.
+
+
+## 17.3.5. Session Info
+
+```{r}
+sessionInfo()
+```
+
+
+
+
+

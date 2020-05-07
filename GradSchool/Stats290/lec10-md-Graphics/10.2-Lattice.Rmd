@@ -1,0 +1,426 @@
+---
+title: 10.2. Lattice Graphics
+output:
+     slidy_presentation
+---
+
+Lattice is very capable and improves on traditional base graphics. The
+design goals were:
+
+- Provide tools to apply general rules for creating more
+    effective graphs
+- Use as much of the available space as possible
+- Force direct comparsion by superposition (grouping) when
+    possible
+- Encourage comparison when juxtaposing (conditioning): use
+    common axes, add common reference objects such as grids
+
+___
+
+## 10.2.1. Lattice model
+
+- A display is made up of various elements
+- The defaults are coordinated to provide meaningful results, but each
+    element can be controlled by the user independently of the others
+
+The main elements are:
+
+- the primary (panel) display
+- axis annotation
+- strip annotation (describing the conditioning process)
+- legends (typically describing the grouping
+
+Additional arguments to the high-level functions are used to activate
+common variants, and full flexibility is allowed through arbitrary
+user-deﬁned functions (e.g. controlling the primary display through
+panel functions)
+
+Each density plot is in an area called _a panel_. Panel sizes
+determined automatically. Axes annotated with tick marks and labels
+only along boundaries saving space. Strips atop each panel display
+info
+
+A _formula_ describes the content of the plots.
+
+___
+
+## 10.2.2. The formula argument
+
+The first argument to many lattice functions is a formula argument
+describing variables to plot. A trellis formula looks like
+
+```{r, eval = FALSE}
+     y ~ x | a * b
+```
+
+The `~` is what makes it a formula. The vertical bar denotes denotes
+conditioning and may be omitted.
+
+So `a` and `b` are _conditioning variables_ and the `y` and `x` are
+called the primary variables. At least one primary variable must be
+specified. (Unlike modelling functions, `*` and `+` in conditioning
+variables are treated identically in lattice. Thus, these are valid
+trellis functions in lattice.)
+
+The formula can include method calls like `sqrt()` or `log()` to
+transform individual variables.
+
+```{r, eval = FALSE}
+~ x
+log(z) ~ x * y | a * b * c
+```
+
+Some examples.
+
+|      Formula            |  Lattice Plot                            |
+|------------------------:|-----------------------------------------:|
+| `z ~ x * y`             | Three dimensional plot                   |
+| `y1 + y2 ~ x`           | Plot two $y$'s versus $x$                |
+| `y ~ x1 + x2`           | Plot $y$ versus two $x$s                 |
+| `y ~ x| g1 + g2 + ...`  | Plot $y$ versus $x$ conditioned on $g$s  |
+| `y ~ x| g1 * g2 * ...`  | Plot $y$ versus $x$ conditioned on $g$s  |
+
+
+Mostly, the $g$'s are factors or _shingles_.
+
+Shingles are a generalization of factors for continuous
+variables. They are a way of discretizing continuous values (using
+`cut`, for example), except that the intervals may overlap.  So an
+observation may be assigned to more than one interval.
+
+The formula `y ~ x | g` indicates that several plots should
+be generated, showing $y$ against $x$ for each level of $g$.
+
+Each unique combination of the levels of the conditioning variables
+determines a _packet_, a subset of the primary variables for
+  that combination.
+
+___
+
+## 10.2.3. Lattice Equivalents of Base Plots
+
+
+|  Lattice Func.  |  Lattice Description             | Base Analog  |
+|:----------------|:---------------------------------|-------------:|
+| `barchart`      | Barcharts                        | `barplot`    |
+| `bwplot`        | Boxplots                         | `boxplot`    |
+| `densityplot`   | Conditional kernel density plots |              |
+| `dotplot`       | Dotplots                         | `dotchart`   |
+| `histogram`     | Histograms                       | `hist`       |
+| `qqmath`        | Quantile–quantile plots          | `qqnorm`     |
+| `stripplot`     | Strip plots                      | `stripchart` |
+| `qq`            | Quantile–quantile plots          | `qqplot`     |
+| `xyplot`        | Scatterplots                     | `plot`       |
+| `levelplot`     | Level plots                      | `image`      |
+| `contourplot`   | Contour plots                    | `contour`    |
+| `cloud`         | 3-dimensional scatterplot        |              |
+| `wireframe`     | 3-dimensional surfaces           | `persp`      |
+| `splom`         | Scatterplot matrices             | `pairs`      |
+| `parallel`      | Parallel coordinate plots        |              |
+
+
+Various types of plots can be obtained by means of plot type
+specifications (argument `type`).
+
+
+| Type         |  Effect                      | Panel function  |
+|:-------------|:-----------------------------|----------------:|
+| `"p"`        | Plot points                  |                 |
+| `"l"`        | Join points by line          |                 |
+| `"b"`        | Both lines and points        |                 |
+| `"o"`        | Points and lines overlaid    |                 |
+| `"S"` `"s"`  | Plot as step function        |                 |
+| `"h"`        | Drop lines to origin         |                 |
+| `"a"`        | Join lines after averaging   | `panel.average` |
+| `"r"`        | Join regression line         | `panel.lmline`  |
+| `"smooth"`   | Plot LOESS smooth            | `panel.loess`   |
+| `"g"`        | Plot a reference grid        | `panel.grid`    |
+
+___
+
+## 10.2.4. Annotation
+
+Extra info can be added to a plot by specifying a _panel function_ via
+the `panel` arguments.
+
+For example, the default panel function for an `xyplot` is
+`panel.xyplot()`.
+
+This draws the default contents for a panel, so you want to call this
+as part of a custom panel function"
+
+```{r, eval = FALSE}
+xyplot(mpg ~ wt, data = mtcars, panel=function(...)
+       panel.xyplot(pch = 10, ...))
+```
+
+The arguments differ from function to function (see docs). Common
+ones: `x`, `y` and `z` and `subscripts` (indices to subset for each
+panel).
+
+Function hooks, such as a _prepanel function_ hook to control the size
+  and scaling of panels (maybe make space for some text you want to
+  show) and a _strip function_ for controlling what gets drawn in
+  the strips of a lattice plot.
+
+___
+
+## 10.2.5. A Quick Tour.
+
+```{r}
+library(lattice)
+data(iris)
+```
+
+Creating a separate panel for each plot
+
+```{r}
+histogram(~Sepal.Length + Sepal.Width +
+          Petal.Length + Petal.Width | Species,
+          data=iris)
+```
+
+Plot all three species in a single panel.
+
+```{r}
+densityplot(~Sepal.Length + Sepal.Width +
+            Petal.Length + Petal.Width, group=Species,
+            data=iris)
+```
+
+Plot without the points.
+
+```{r}
+densityplot(~Sepal.Length + Sepal.Width +
+            Petal.Length + Petal.Width, group=Species,
+            data=iris, plot.points=FALSE, ref=TRUE)
+```
+
+Add in a legend
+
+```{r}
+densityplot(~Sepal.Length + Sepal.Width + Petal.Length +
+            Petal.Width, group=Species, data=iris,
+            ref=TRUE, plot.points=FALSE,
+            auto.key=list(columns=3))
+```
+
+Some formula details: `*` and `+` are treated similarly only in the
+conditioning part of the formula!
+
+```{r}
+densityplot(~Sepal.Length * Sepal.Width * Petal.Length *
+            Petal.Width, group=Species, data=iris,
+            ref=TRUE, plot.points=FALSE,
+            auto.key=list(columns=3))
+```
+
+An example normal quantile plot:
+
+```{r}
+qqdata <- data.frame(x = c(rnorm(100), qnorm(ppoints(100))),
+                     y = c(rep("x", 100),
+                     rep("Normal Quantile", 100)))
+qq(y ~ x, data=qqdata, col="red", lwd=3)
+```
+___
+
+## 10.2.6. Famous Barley data
+
+See for example `?barley`. This is a data set containing total yield
+in bushels per acre for 10 varieties at 6 sites in each of two years.
+
+```{r}
+str(barley)
+```
+
+We can examine some boxplots.
+
+```{r}
+bwplot(yield ~ variety, data = barley)
+```
+
+```{r}
+bwplot(variety ~ yield, data = barley)
+```
+
+```{r}
+bwplot(variety ~ yield | year, data = barley)
+```
+
+Some dot plots.
+
+```{r}
+dotplot(variety ~ yield, data = barley)
+```
+
+We add groups distinguished by color
+
+```{r}
+dotplot(variety ~ yield, data = barley, groups = year,
+        col=c("red", "blue"))
+```
+
+Condition on site.
+
+```{r}
+dotplot(variety ~ yield | site, data = barley)
+```
+
+Group by year and then condition on site.
+
+```{r}
+dotplot(variety ~ yield | site, data = barley, groups = year)
+```
+
+We need to add color to see difference.
+
+```{r}
+dotplot(variety ~ yield | site, data = barley, groups = year,
+        col=c("red", "blue"))
+```
+
+Note that conditioning on both makes things less obvious.
+
+```{r}
+dotplot(variety ~ yield | site * year, data = barley)
+```
+
+So go back to condition on site and group by year and add a legend
+
+```{r}
+dotplot(variety ~ yield | site, data = barley, groups = year,
+        col=c("red", "blue"),
+        auto.key=list(columns=2, col=c("red", "blue")))
+```
+
+
+The plot symbol color is screwed up in the previous dotplot. So we
+better have a separate symbol for each.
+
+```{r}
+dotplot(variety ~ yield | site, data = barley, groups = year,
+        pch=c(2, 4),
+        col=c("red", "blue"),
+        auto.key=list(columns=2, col=c("red", "blue")))
+```
+
+Hmmm. Plot symbol still screwed up, so build legend manually
+
+```{r}
+dotplot(variety ~ yield | site, data = barley, groups = year,
+        col=c("red", "blue"),
+        pch=c(2, 4),
+        key=list(text=list(c("1932", "1931")),
+                 columns=2,
+                 col=c("red", "blue")))
+```
+
+
+We can save plots to various formats such as pdf, png etc.
+
+```{r}
+pdf(file="yield.pdf", paper="letter", width=8, height=10.5)
+dotplot(variety ~ yield | site, data = barley, groups = year,
+        col=c("red", "blue"),
+        pch=c(2, 4),
+        key=list(text=list(c("1932", "1931")),
+                 columns=2,
+                 col=c("red", "blue")))
+dev.off()
+```
+___
+
+## 10.2.7. Trellis Plots
+
+One nice thing about `lattice` (and `ggplot`) is that the plots are
+actually objects.  They don't plot until you `print` them.
+
+
+```{r}
+## Incremental updating
+tp1 <- densityplot(~Sepal.Length+Sepal.Width+
+  Petal.Length+Petal.Width,group=Species,data=iris)
+print(tp1)
+```
+
+You can also update the object (will not affect `tp1` above.)
+
+```{r}
+tp2 <- update(tp1, plot.points=FALSE, ref=TRUE)
+plot(tp2)
+```
+
+Add the legend.
+
+```{r}
+tp3 <- update(tp2, auto.key=list(columns=3))
+plot(tp3)
+```
+
+You can examine `tp3` like any other object.
+
+```{r}
+names(tp3)
+tp3$legend
+```
+
+And even pick off one of the plots.
+
+```{r}
+tp3[1]
+```
+___
+
+## 10.2.8. X-Y plots
+
+```{r}
+tp = xyplot(lat~long, data=quakes, pch=".")
+update(tp,
+  main="Earthquakes in the Pacific Ocean\n(since 1964)")
+```
+
+We can apply a 3-level shingle, no overlap.
+
+```{r}
+depthgroup <- equal.count(quakes$depth, number=3,
+                          overlap=0)
+magnitude <- equal.count(quakes$mag, number=2,
+                         overlap=0)
+xyplot(lat ~ long | depthgroup*magnitude,
+       data=quakes,main="Fiji Earthquakes",
+       ylab="latitude", xlab="longitude",
+       pch=".",
+       scales=list(x=list(alternating=c(1,1,1))),
+       between=list(y=1),
+       par.strip.text=list(cex=0.7),
+       par.settings=list(axis.text=list(cex=0.7)))
+```
+
+___
+
+## 10.2.9. Lattice Summary
+
+- Improves on traditional graphics by making optimum use of display
+    area by providing very fine control over layouts and taking care
+    of details for you
+- Better looking graphics (relatively speaking!)
+- Powerful extensions are possible
+- The output can be annotated, edited, saved and computed with. This
+  is key, because it helps you build up plots.
+- Originally, a replacement for `Trellis` graphics in Splus to produce
+  a whole series of plots.
+
+___
+
+## Session Info
+
+```{r}
+sessionInfo()
+```
+
+
+
+
+
+

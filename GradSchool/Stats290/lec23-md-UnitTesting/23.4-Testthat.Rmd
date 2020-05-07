@@ -1,0 +1,216 @@
+---
+title: 23.4. The `testthat` package
+output:
+     slidy_presentation
+---
+
+The package `testthat` is for adding tests to your package, so that
+you can ensure the code is performing as it should. 
+
+The `testthat` model is built on some definitions.  I'm using stuff
+from [Hadley Wickham's website](http://r-pkgs.had.co.nz/tests.html)
+mostly.  In a 2011 paper in the R journal (vol. 3/1), Hadley Wickham
+writes:
+
+- An _expectation_ describes what a computation should return. Does it
+  have the right value and right class? Does it produce error messages
+  when you expect it to? There are 16 (probably more now) types of
+  built-in expectations
+
+- A _test_ groups together multiple expectations to test one function,
+  or tightly related functional- ity across multiple functions. A test
+  is created with the test_that function.
+
+- A _context_ groups together multiple tests that test related
+  functionality.
+
+Expectations are grouped into tests which are organized in files.
+
+## 23.4.1. Example
+
+Here's an example from the `stringr` package:
+
+```{r, eval=FALSE}
+library(stringr)
+context("String length")
+
+test_that("str_length is number of characters", {
+  expect_equal(str_length("a"), 1)
+  expect_equal(str_length("ab"), 2)
+  expect_equal(str_length("abc"), 3)
+})
+
+test_that("str_length of factor is length of level", {
+  expect_equal(str_length(factor("a")), 1)
+  expect_equal(str_length(factor("ab")), 2)
+  expect_equal(str_length(factor("abc")), 3)
+})
+
+test_that("str_length of missing is missing", {
+  expect_equal(str_length(NA), NA_integer_)
+  expect_equal(str_length(c(NA, 1)), c(NA, 1))
+  expect_equal(str_length("NA"), 2)
+})
+```
+
+## 23.4.2. Expectations
+
+Expectations start with `expect_` and take two arguments, the actual
+result followed by the expected result. If they don't agree, an error
+is thrown.
+
+```{r, eval = FALSE}
+library(testthat)
+expect_equal(c2f(10), 50)
+expect_error(c2f("foo"))
+expect_equal(c2f(11), 50) ## should fail
+expect_equal(sqrt(2) ^ 2, 2)
+expect_identical(sqrt(2) ^ 2, 2) ##no for sure
+expect_true(sqrt(2) ^ 2 == 2) ## should not be
+expect_identical(list(1,2,3), list(1.0, 2.0, 3.0))
+expect_identical(list(1L ,2L ,3L ), list(1.0, 2.0, 3.0)) ##no
+```
+
+Use `expect_identical` to compare complex objects.
+
+___
+
+### 23.4.2.1. Example
+
+```{r, eval = FALSE}
+string <- "Testing is fun!"
+
+expect_match(string, "Testing")
+
+expect_match(string, "testing")
+
+## Additional arguments are passed to grepl:
+expect_match(string, "testing", ignore.case = TRUE)
+```
+
+___
+
+### 23.4.2.2. Variations
+
+Several variations of `expect_match` named as shown.
+
+```{r, eval = FALSE}
+a <- list(1:10, letters)
+
+expect_output(str(a), "List of 2")
+expect_output(str(a), "int [1:10]", fixed = TRUE)
+
+expect_message(library(mgcv), "This is mgcv")
+```
+
+___
+
+```{r, eval = FALSE}
+expect_warning(log(-1))
+expect_error(1 / "a")
+
+## But always better to be explicit
+expect_warning(log(-1), "NaNs produced")
+expect_error(1 / "a", "non-numeric argument")
+
+## Failure to produce a warning or error when expected is an error
+expect_warning(log(0))
+
+expect_error(1 / 2)
+```
+
+___
+
+`expect_is` is used to check inheritence from a specified class.
+
+```{r, eval = FALSE}
+model <- lm(mpg ~ wt, data = mtcars)
+expect_is(model, "lm")
+expect_is(model, "glm")
+```
+
+`expect_true` and `expect_false` do the obvious and can be used for
+generic checks.
+
+___
+
+### 22.2.2. Table of expectations
+
+
+Full                                     | Short cut
+-----------------------------------------|------------------------
+`expect_that(x, is_true())`		         | `expect_true(x)`
+`expect_that(x, is_false())`		     | `expect_false(x)`
+`expect_that(x, is_a(y))`			     | `expect_is(x, y)`
+`expect_that(x, equals(y))`		         | `expect_equal(x, y)`
+`expect_that(x, is_equivalent_to(y))`    | `expect_equivalent(x, y)`
+`expect_that(x, is_identical_to(y))`     | `expect_identical(x, y)`
+`expect_that(x, matches(y))`		     | `expect_matches(x, y)`
+`expect_that(x, prints_text(y))`	     | `expect_output(x, y)`
+`expect_that(x, shows_message(y))`       | `expect_message(x, y)`
+`expect_that(x, gives_warning(y))`       | `expect_warning(x, y)`
+`expect_that(x, throws_error(y))`	     | `expect_error(x, y)`
+`expect_that(x, equals_reference(y))`    | `expect_equal_to_reference(x,y)`
+`expect_that(x, is_less_than(y))`	     | `expect_less_than(x,y)`
+`expect_that(x, is_more_than(y))`	     | `expect_more_than(x,y)`
+`expect_that(x, has_names(y))`           | `expect_named(x, y)`
+`expect_that(object, is_null())`         | `expect_null(x)`
+
+
+___
+
+### 22.2.3. Using `testthat` with packages
+
+In `devtools` if you run `devtools::use_testthat()` or
+`usethis::use_testthat`, it automatically does the following:
+
+1. Creates a `tests/testthat`
+2. Adds `testthat` to the `Suggests` field in the `DESCRIPTION`
+3. Creates a `tests/testthat.R` file that runs all your tests when `R
+CMD check` runs.
+
+You can always run your tests in your package with `devtools::test()`.
+
+___
+
+## 22.3. Recommendation
+
+However, if you are new to testing, especially in R, I recommend the
+use of `testthat`. Not only does it simplify testing, but is also far
+easier to use than `RUnit` and other variants I have seen.
+Furthermore, you can actually run these tests in your session and
+thereby make sure you are constructing valid tests. Thus `testthat`
+fits nicely into your code development cycle. 
+
+Below is an example that produces an error as expected for the last
+expectation.
+
+```{r, error = TRUE}
+library(testthat)
+library(stringr)
+test_that("str_length is number of characters", {
+  expect_equal(str_length("ab"), 2)
+  expect_equal(str_length("abc"), 3)
+  expect_equal(str_length("a"), 2)  
+})
+```
+
+___
+
+## 22.4. References
+
+- Hadley Wickham's article in
+[R Journal](https://journal.r-project.org/archive/2011-1/RJournal_2011-1_Wickham.pdf).
+
+- Chapter 7 of Hadley Wickham's book on _R packages_.
+
+- Also look at source of packages, say `stringr` or `cubature` or
+`CVXR`. 
+
+A convenient reference is the package `devtools` cheatsheet. Google it.
+
+## Session Info
+
+```{r}
+sessionInfo()
+```

@@ -1,0 +1,13 @@
+Package: RcppUniform
+Title: Rcpp Example of Exposing a C++ Class
+Version: 0.1
+Authors@R: 'Balasubramanian Narasimhan <naras@stat.stanford.edu> [aut, cre] (aka Naras)'
+Description: Expose a C++ class to R using R6
+Depends:
+    R (>= 3.1.2)
+License: GPL (>= 2)
+LazyData: true
+RoxygenNote: 7.0.2
+LinkingTo: Rcpp
+Encoding: UTF-8
+Imports: Rcpp

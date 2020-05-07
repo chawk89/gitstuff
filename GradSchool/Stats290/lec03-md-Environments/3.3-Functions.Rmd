@@ -1,0 +1,341 @@
+---
+title: "3.3. Functions"
+output:
+     slidy_presentation
+---
+
+In R, everything happens via functions. So almost all the work an R
+developer does is constructing functions.
+
+Functions are objects in R like any other. As we saw earlier, they
+have a type and class too.
+
+```{r}
+typeof(mean)
+class(mean)
+```
+
+Functions have three components:
+
+- a formal argument list, that indicates how it will present itself to
+some one who wants to use the function
+- a body, that actually does the work
+- an environment, that affects how the body will execute its task
+
+We take them one by one.
+
+## 3.3.1. Arguments, Invocation
+
+When defining functions, arguments can be named and given default
+values.
+
+```{r}
+f <- function(x = 1, y, z) x + 2 * y + 3 * z
+formals(f)
+body(f)
+environment(f)
+```
+
+From the above, we know that this function has formal arguments named
+`x`, `y` and `z` with `x` having a default value of 1.  So in
+invocations, if `x` is left out, its value will be 1 by default.
+
+When invoking functions, values to the arguments are matched by
+position or names depending on the invocation.
+
+```{r, error = TRUE}
+f(2, 3) # by position x = 2, y = 3
+f(z = 1, 2, 3) # x =2, y=3
+```
+
+In the first invocation, `x` was bound to 2, `y` to 3, but `z` was
+left an orphan. Since there was no `z` to be found anywhere, per the
+usual rules for looking up objects, the invocation failed at the point
+where the evaluation of the expression `x + 2 * y + 3 * z` needed the
+value for `z`. 
+
+___ 
+
+Functions can be anonymous: they are not bound to any symbol. 
+
+```{r}
+function(x) x^2  ## Just a definition
+(function(x) x^2)(2)  ## an invocation
+```
+
+Functions can take a variable (and unspecified) number of
+arguments. In R this is indicated in the function definition as
+ellipsis arguments. For example, consider the `paste` function.
+
+```{r}
+paste
+```
+The `...` here refers to the fact that `paste` will concatenate _any
+number_ of arguments you provide using the separator `sep`. 
+
+This is very useful if you want to design functions that work well
+with other functions. We'll see examples in plotting. 
+
+
+## 3.3.2. Return values
+
+Functions can return arbitrary values, including other functions. In R
+functions always return some object, either explicitly or implicitly.
+
+Complex structures are usually packed into lists and returned. This is
+common practice in R.
+
+The value of a function call is the value of the last
+expression evaluated in the function. So an explicit `return`
+statement is not necessary. 
+
+```{r}
+f <- function(x, y) return(sqrt(x^2 + y^2))
+g <- function(x, y) sqrt(x^2 + y^2)
+```
+are equivalent. However, if you have code where you're exiting the
+function at several locations---one should minimize this---an explicit
+`return` is useful to draw attention to that fact.
+
+___
+
+When invoking functions in an interactive session, the result of the
+function call is usually printed. If you don't want the result
+returned silently, wrap it in `invisible`. (The latter only means that
+the return value will not be printed; the value is nevertheless
+returned!)
+
+```{r}
+g <- function(x) invisible(2 * x)
+g(10)  ## doesn't print anything, but actually returned 20
+(g(10)) ## value is 20 as seen here.
+```
+
+___
+
+Functions can return other functions.
+
+```{r}
+f1 <- function(x) {
+    function(y) x * y
+}
+
+f2 <- f1(2) ## f2 is a function!
+```
+
+Since `f2` is a function, you have to use it as such.
+
+```{r}
+f2(5)
+f2(10)
+```
+
+## 3.3.3. Dynamic argument lists
+
+Sometimes a part of your computation may construct a list of arguments
+for a function call at run time. How to invoke a function using those
+constructed arguments?
+
+Consider the function `paste` (or its variant `paste0`) that basically
+does string concatenation using the arguments passed. Suppose you
+wanted to concatenate several vectors but you did not know ahead of
+time how many vectors you might have to concatenate.
+
+```{r}
+args <- list(x = letters[1:3], y = 1:3)
+paste(args$x, args$y, sep = ".")
+
+args2 <- list(x = letters[1:3], y = LETTERS[1:3], z = 1:3, w = c("+", "-", "?"))
+paste(args2$x, args2$y, args2$z, args2$w, sep = ".")
+```
+
+So you need to call `paste` with a variable number of arguments that
+may be programmatically computed. You have to basically invoke `paste`
+with a constructed argument list. Enter `do.call`.
+
+```{r}
+args <- list(x = letters[1:3], y = 1:3, sep = ".")
+do.call(paste, args) ## works
+args2 <- list(x = letters[1:3], y = LETTERS[1:3],
+              z = 1:3, w = c("+", "-", "?"),
+              sep = ".")
+do.call("paste", args2) ## function name can also be a character
+```
+
+Very useful but be careful not to abuse it.
+
+__Aside__: Another way to create calls to function on the fly is to
+use the `call` function to create a function call. For example, the
+following creates a call to the `mean` function with argument `1:10`
+that can later be evaluatd.
+
+```{r}
+meanCall <- call("mean", 1:10)
+eval(meanCall)
+```
+
+So one may ask if it is not possible to solve the above paste problem
+another way via:
+```{r}
+eval(call("paste", x = letters[1:3], y = LETTERS[1:3],
+          z = 1:3, w = c("+", "-", "?"), sep = "."))
+```
+
+The answer is __NO__, because the problem is _precisely writing out
+the arguments_ for the function `paste`. However, the following
+variant
+```{r}
+eval(as.call(c(paste, args2)))
+```
+will indeed be an equivalent, although less transparent than the
+`do.call` solution.  Furthermore, one needs to understand `eval`
+thoroughly before using it in code. We'll discuss that in coming
+lectures. 
+
+## 3.3.4. Modifying function argument list
+
+Functions can be computed with, like any other object. This makes R
+dynamic and powerful as we will see later.
+
+```{r}
+f
+formals(f) <- list(a = 2, b = 3)
+body(f) <- expression(a * b + aa)
+f
+```
+
+So the function `f` got changed.
+
+```{r, error = TRUE}
+f(3, 4) ## fails.
+```
+
+But not completely. Its _environment_ was still the old one and `aa`
+is not there in that environment. That is why the above invocation
+failed.
+
+## 3.3.5. Environment of functions
+
+There are several environments associated with functions. Suppose `f`
+is a function.
+
+- The _enclosing environment_, where the function `f` is defined or
+  constructed. It always tags along with the function and can be
+  obtained via `environment(f)`. 
+- The _binding environment_, the environment containing that actually
+  contains the symbol `f` which is associated with the definition of
+  `f`. This need not be the same as the enclosing environment. 
+- The _execution environment_, where the function actually
+  executes. This is dynamically created every time the function is
+  invoked. So it is a new environment every time.
+- The _calling environment_, where the function is invoked from. Once
+  again this need not be the same as the enclosing or binding
+  environment. 
+
+This seems like a lot, and it is.  We will delay the details a bit
+down the line, but let us examine the environment of `f`.
+
+```{r, error = TRUE}
+g <- function(x) print(environment())
+environment(g)
+g()
+environment(g)
+g()
+```
+
+Let's do some mischief.
+
+```{r, error = TRUE}
+environment(f) <- emptyenv()
+f(1, 2)  ## bombs badly
+environment(f) <- baseenv()  ## the base R environment
+f(1, 2)
+```
+
+So now `aa` is not found. Let's change that as well.
+
+```{r}
+ef <- new.env()
+ef$aa <- 5
+environment(f) <- ef
+f(3, 4) ## yields 12
+```
+
+Useful sometimes to examine what objects are in the environment of a
+function. Here is a function you can use to list them.
+
+```{r}
+listMyEnvironments <- function(x, y) {
+    e <- environment() ## current execution environment
+    print("Current env objects")
+    print(ls(e))
+    print("Parent env objects")
+    ls(parent.env(e))
+}
+```
+
+## 3.3.6. Functions returning functions
+
+Nothing stops you from defining functions within functions. This is
+often necessary to avoid clutter and keep things clean.
+
+
+```{r}
+f3 <- function(x) {
+    g <-  function(x) {
+        x * x
+    }
+    g(2 * x)
+}
+f3(10)
+```
+
+Note that the function `g` is only visible to `f3`. In fact, it
+becomes visible inside the body of `f3` when `f3` is invoked and then
+disappears.
+
+```{r}
+f3a <- function(x) {
+    x <- x + 1
+    g <-  function(x) {
+        x * x
+    }
+    g(2 * x)
+}
+f3a(10)
+```
+
+## 3.3.7 Applying functions
+
+A very common idiom in R is to _apply_ a function to various R
+objects.
+
+The simplest such one is `lapply`, which takes a function and a list,
+and returns a list of the results (as long as the original list). The
+function to apply need not be named; all that is needed is a closure.
+
+```{r}
+lapply(list(1, 2, 3), function(x) x^2) # 'l' for list
+lapply(1:3, function(x) x^2)
+```
+
+```{r}
+sapply(1:3, function(x) x^2) ## 's' for simplify
+sapply(1:3, function(x) c(x, 2 * x)) ## simplifies to matrix
+```
+
+```{r}
+mapply(function(x, y) x * y, 1:3, 4:6) ## 'm' for multivariate version of sapply
+```
+
+It is a good idea to always think in terms of applying functions to
+argument lists. In fact, this is the essence of a _functional_ way of
+programming.
+
+## Session Info
+```{r}
+sessionInfo()
+```
+
+
+

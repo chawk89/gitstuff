@@ -1,0 +1,535 @@
+---
+title: 15.1 Computing on the Language
+output: slidy_presentation
+---
+
+```{r, echo = FALSE, message = FALSE}
+## Install a package if not already installed
+installIfNeeded <- function(packages, ...) {
+    toInstall <- packages[!(packages %in% installed.packages()[, 1])]
+    if (length(toInstall) > 0) {
+        install.packages(toInstall, repos = "https://cloud.r-project.org")
+    }
+}
+
+## Ensure packages exist and activate them
+needPackages <- function(packages) {
+    installIfNeeded(packages)
+    for (x in packages) {
+        library(x, character.only = TRUE)
+    }
+}
+needPackages(c("tidyverse"))
+```
+
+
+R is an extremely dynamic language. One of the neat features of R is
+that you can manipulate objects that evaluate to some value just as
+you would any other object.
+
+There are objects of type `language` that can be manipulated to
+compute on the language itself. This allows, among other things:
+
+- to examine R objects and take appropriate actions based on the type,
+  class, etc., i.e. _compute on the language_
+- to construct code at run time 
+- to evaluate code in non-standard ways
+
+___
+Changing the normal R evaluation semantics to achieve an effect is
+called _Non-Standard Evaluation_ or _NSE_.  Tidyverse uses a lot of
+NSE to reduce typing in interactive sessions. However, that comes at a
+cost: Packages that use `tidyverse` functions, for example, have to
+account for loss of referential transparency. What does that mean?
+
+Consider this simple example.
+
+```{r}
+df <- tibble(x = 1:3, y = 3:1)
+filter(df, x == 1)
+```
+
+is not equivalent to:
+
+```{r, error = TRUE}
+my_var <- x
+filter(df,  my_var == 1)
+```
+
+or even
+
+```{r, error = TRUE}
+my_var <- "x"
+filter(df,  my_var == 1)
+```
+
+
+So if you use `tidyverse` in your packages, there may be cases where you
+have to understand NSE. So we dig a bit deeper into R's evaluation
+mechanism.
+
+## 15.1.1. Expressions
+
+An expression in R is an object that R can evaluate. That is, it can
+be sent as input to the R REPL.
+
+The function `quote` returns an expression which can be processed by
+R.
+
+```{r}
+x <- 20
+z <- quote(y <- x * 10)
+z
+```
+
+Here `z` is an expression and doesn't have a numeric value. We will
+see how we can evaluate such an expression later.
+
+## 15.1.2.  Capturing Expressions.
+
+If you call the `plot` function as follows
+
+```{r}
+x <- 1:5
+plot(x = x, y = x^2) 
+```
+
+notice how the $y$ axis label is the expression used in your call to
+`plot`. How did this happen?
+
+Enter `substitute`, which allows you to capture an expression. (We will
+focus on its use inside a function here and it behaves differently at
+the command line!) 
+
+```{r}
+f <- function(x) {
+  substitute(x)
+}
+f(1:5)
+f(a + b + c)
+f(a + b*x + c*x^2)
+```
+
+Recall that function arguments, which are lazily evaluated, are
+implemented using _promises_: special objects that capture both the
+expression and the environment where the expression should be
+evaluated. They are evaluated exactly once, when the argument value is
+needed. 
+
+`substitute()` uses the promise objects to do its job and captures the
+unevaluated expression. It is often paired with `deparse` which takes
+an expression and converts it into a character vector.
+
+```{r}
+g <- function(x) deparse(substitute(x))
+g(1:5)
+g(a + b + c)
+g(a + b*x + c*x^2)
+```
+
+Note the difference: the results are character vectors!
+
+## 15.1.3. The `quote` function
+
+Let us examine the `quote` function which returns its argument
+unevaluated.
+
+```{r}
+e1 <- quote(2 + 5)
+typeof(e1)
+class(e1)
+```
+
+We know that `e1` is actually `quote("+"(2, 2))` and therefore its
+class is `call` (i.e. a function call). Its type is `language`.
+
+Sometimes there is a need to evaluate parts of an expression and leave
+others untouched. Enter: `bquote`.
+
+```{r}
+x <- rnorm(10)
+be <- bquote(y <- .(x) * z) # y and z unevaluated, x evaluated
+be
+```
+
+The construct `.()` delineates what is to be evaluated.  This means
+that you can control when certain things get evaluated.
+
+Because of the scoping rules of R, the same expression can return
+different values depending on when and where it is evaluated, as can
+be seen below.
+
+```{r}
+({z <- 10; eval(be)})
+({z <- 2; eval(be)})
+```
+
+(We will talk more about evaluation below, but for now, assume that it
+takes an expression in the R language, and returns the results of
+executing that expression as if you typed it at the console.)
+
+## 15.1.4. The `call` object
+
+A `call` object is an unevaluated function call, that is, an
+unevaluated expression which consists of the named function applied to
+the given arguments, which could be empty.
+
+Recall our `e1`.
+
+```{r}
+e1
+```
+
+One can access elements of the call like your would lists.
+```{r}
+e1[[1]]
+e1[[2]]
+e1[[3]]
+```
+
+A more complex construct.
+
+```{r}
+e3 <- quote((x + y) * z + w)
+e3
+as.list(e3) ## actual representation
+typeof(e3[[1]]) ## symbol
+typeof(e3[[2]]) ## language
+typeof(e3[[3]]) ## symbol again
+```
+
+Indexed access, as we know, is also a function call.
+
+```{r}
+qx <- quote(x[5])
+qx
+length(qx)
+qx[[1]]
+qx[[2]]
+qx[[3]]
+x
+```
+
+How about keyword access? It is quite similar.
+
+```{r}
+e2 <- quote(plot(x = age, y = weight))
+e2[[1]]
+e2[[2]]
+e2[[3]]
+e2$x
+e2$y
+```
+
+Since `plot` is the name of a function, let us examine it.
+
+```{r}
+typeof(e2[[1]])
+```
+
+So it is actually a symbol, i.e. a name of an object. These can be
+manipulated.  For example, below, we change the name and add another
+argument. (The functions `as.name` and `as.symbol` are synonymous.)
+
+```{r}
+e2[[1]] <- as.symbol("foo")
+e2
+e2$z <- as.name("height")
+e2
+```
+
+To see a dynamic application of `call` objects, consider the following
+example. Suppose you have some data in a vector `x`.
+
+You wish to write a function `apply_f` to let the user provide the
+name of any R function (as a string) that operates on the vector,
+execute it and return the results.
+
+So `apply_f(f = "mean", x)` should return `mean(x)` and `apply_f(f =
+"median", x)` should return `median(x)`, etc.
+
+Let us begin by examining a few examples.
+
+```{r}
+fName <- "mean"
+typeof(fName)
+fCall <- call(fName)
+typeof(fCall)
+class(fCall)
+```
+So now that `fCall` is actually a call, we can work with it.
+
+```{r, error = TRUE}
+fCall[[1]]
+fCall[[2]]
+```
+The second resulted in an error because there were no arguments. Let's put in an argument, our `x`.
+
+```{r}
+fCall[[2]] <- x
+fCall
+```
+
+Now, we can actually evaluate this expression.
+
+```{r}
+eval(fCall)
+```
+
+Let us now change the `mean` to `median`.
+
+```{r}
+fCall <- call("median")
+fCall[[2]] <- x
+eval(fCall)
+```
+
+## 15.1.5. Evaluation
+
+Evaluation is the opposite of quoting. Each application of `eval`
+peels off one layer of `quote`.
+
+```{r}
+eval(e1)
+e5 <- quote(quote(2 + 3))
+e5A <- eval(e5)
+e5A
+typeof(e5A)
+e5B <- eval(e5A)
+typeof(e5B)
+e5B
+```
+
+The function `eval` can also take an environment as a second
+argument. This specifies the environment in which the evaluation can
+take place. 
+
+_Any arguments needed for evaluating the expression are first sought
+in that environment._
+
+For example, consider:
+
+```{r, error = TRUE}
+rm(z)
+be
+eval(be) # error z is not found
+```
+
+However, if we set up `z` appropriately, we should be fine.
+
+```{r}
+e <- new.env()
+e$z <- 10
+w <- eval(be, e)
+w
+```
+
+Since, environments and lists and data frames all bind names to values
+in a similar way (`$`, `[[`), the second argument need not be just an
+environment:
+
+```{r}
+print(eval(be, list(z = 10)))
+print(eval(be, data.frame(z = 10)))
+```
+
+## 15.1.6. NSE in `subset`
+
+`subset` is an R function that selects variables and rows in a data
+frame based upon a condition.
+
+```{r}
+d <- data.frame(a = 1:10, b = 6:15, c = 16:25)
+subset(d, a < 4)
+```
+
+You can also select variables.
+
+```{r}
+## select all vars other than b
+subset(d, a < 3, select = -b) 
+```
+
+___
+
+How does it work?  Let us start by writing our own subset function
+called `subset2` using what we have learned so far.  For the `eval`
+part, we will set things up so that the data frame that is passed as
+the argument is used as the environment where the expression is
+evaluated. 
+
+```{r}
+subset2 <- function(x, condition) {
+    condition_call <- substitute(condition)
+    print(condition_call)
+    print(typeof(condition_call))
+    r <- eval(condition_call, x)
+    print(r)
+    
+    x[r, ]
+}
+subset2(d, a < 4)
+subset2(d, b < 3)
+```
+
+
+So far, so good.
+
+
+## 15.1.7. Breaking Bad
+
+Let us test how good our `subset2` function is.  We set some global
+variables in our session.
+
+```{r, error = TRUE}
+y <- 4
+x <- 4
+condition <- 4
+condition_call <- 4
+```
+
+Let us try some things.
+
+```{r}
+subset2(d, a == 4)
+```
+
+```{r}
+subset2(d, a == x)
+```
+
+Hmmm..
+
+```{r, error = TRUE}
+subset2(d, a == condition)
+```
+
+```{r, error = TRUE}
+subset2(d, a == condition_call)
+```
+
+Many wrong/wierd answers. Why? 
+
+___
+
+```{r}
+subset2(d, a == x)
+```
+
+Let us focus on the call `subset2(d, a == x)`. 
+
+When `subset2` evaluates the `condition_call`, the following happens:
+
+- `x` is bound to a promise that evaluates to `d` the data frame
+  passed as the argument
+- The value of `condition_call` is  the _expression_ `a == x`,
+- The value of `a` is found in the the data frame `x`, which is `d`
+- The value for `x` is looked for in the data frame, and it is not found.
+- So R looks to the enclosing environment, which is the environment
+  inside the function `subset2`. In that environment, `x` is found and
+  it is `d`
+- So the expression `a == x` becomes, in effect, `d$a == d`
+- Since `d` is a data frame, R's coercion will actually create a data
+  frame of three colummns of `d$a` and return a matrix of `TRUE` or
+  `FALSE`. 
+```{r}
+d$a == d
+```
+- finally the expression `x[r, ]` will turn that matrix of
+  `TRUE/FALSE` into one long vector and return matching rows of
+  `d`. Rules of logical indexing will apply to turn up `NA` values.
+
+The _root cause_ of the problem is that R found `x` in the wrong
+place. We need to control this and tell R where to look for variables
+like `x` are not directly in the data frame.
+
+## 15.1.8. The Fix
+
+The function `eval` takes a third argument, which specifies which
+enclosing environment to use. If we set this up accordingly, we are
+set. The `parent.frame()` of a function is the environment where the
+function was defined. That is what we want.
+
+
+```{r}
+subset3 <- function(x, condition) {
+  condition_call <- substitute(condition)
+  r <- eval(condition_call, x, parent.frame())
+  x[r, ]
+}
+subset3(d, a == 4)
+subset3(d, a == x)
+subset3(d, a == condition)
+subset3(d, a == condition_call)
+```
+
+There are other nuances that we will not get into. For further detail,
+refer to Chapter 20 of of [Advanced R](https://adv-r.hadley.nz) by
+Hadley Wickham.
+
+## 15.1.9. Example: `dplyr` programming
+
+Since `dplyr` uses NSE a lot, there are several functions provided to
+aid in programming.  In particular, `dplyr` relies on the `rlang`
+package that provides functions for capturing expressions, along with
+the environments. 
+
+In situations such as the following
+
+```{r, error = TRUE}
+my_select <- function(df, var) {
+    dplyr::select(df,  var)
+}
+```
+
+where we want to select a variable, say, the function `rlang::enquo`
+and the unquote operator `!!` are provided.
+
+```{r}
+my_select <- function(df, var) {
+    my_var <- rlang::enquo(var)
+    dplyr::select(df,  !! my_var)
+}
+``` 
+
+so that 
+
+```{r}
+my_select(d, a)
+```
+
+will work as expected.  Also `rlang::sym` is provided to convert a
+string into a symbol for use if the argument `var` is a string.
+
+## 15.1.10. `parse()` 
+
+`parse()` is the opposite of `deparse()`. Recall that `deparse()`
+turns expressions into strings; `parse` does the opposite: it turns
+strings into expressions. 
+
+This means that code can be dynamically generated as a string. 
+
+```{r}
+x <- "print('I am a string')"
+parse(text = x)
+```
+
+Now this can be evaluated.
+
+```{r}
+eval(parse(text = x))
+```
+
+It is as if the command `print('I am a string')` was typed into an R
+prompt!
+
+
+The `tidyverse` package has `rlang::parse_expr` function which will
+parse work well within the tidyverse ecosystem.
+
+
+## 15.1.11. Session Info
+
+```{r}
+sessionInfo()
+```

@@ -1,0 +1,103 @@
+---
+title: 'Stat 290: Assignment 1: Q3'
+output:
+  html_document:
+    df_print: paged
+---
+
+
+## Q3 (Concatenation operator) [8 pts]
+
+  Define a `%+%` inline operator that works on two data frames `x` and
+  `y` containing _only_ named `integer`, `character` (_not_ `factor`!)
+  and `numeric` vectors as follows.
+
+  If the names and types all match, perform an `rbind` (append rows);
+  otherwise, if the number of rows match perform a `cbind` (append
+  columns). Else, throw an error due to incompatibility per hint below.
+
+  Provide meaningful names for the variables when necessary. Do
+  account for the case where `x` and `y` may share names.
+
+### Hints
+
+- Useful functions are: `all`, `%in%`, `nrow`, `sapply`, `names`, `intersect`, `typeof`, `match`, `paste`.
+- Note that `data.frame(a1 = 1:2) %+% data.frame(b1 = 1L)` should throw an error of the form:
+```{r, error = TRUE}
+stop("%+%: Incompatible types for x and y")
+```
+- Check the test cases below.
+
+```{r q_3, eval = TRUE}
+`%+%` <- function(x, y) {
+    if (!(is.data.frame(x) || is.data.frame(y)))
+        stop("Error, expecting data frames for x and y")
+    nx <- ncol(x) ; ny <- ncol(y)
+    xNames <- names(x) ; yNames <- names(y)
+    xTypes <- sapply(xNames, function(z) typeof(x[, z]))
+    yTypes <- sapply(yNames, function(z) typeof(y[, z]))
+    ##expectedTypes <- c("integer", "numeric", "character")
+    expectedTypes <- c("integer", "double", "character")
+    typesOK <- sapply(x, function(z) (typeof(z) %in% expectedTypes) && !is.factor(z))
+    if (!all(typesOK)) {
+        stop("%+%:  Unexpected types for data frame x columns")
+    }
+    typesOK <- sapply(y, function(z) (typeof(z) %in% expectedTypes) && !is.factor(z))
+    if (!all(typesOK)) {
+        stop("%+%:  Unexpected types for data frame y columns")
+    }
+    if (nx == 0)
+        return(y)
+    else if (ny == 0)
+        return(x)
+    if ((nx == ny) && all(xNames == yNames) && all(xTypes == yTypes)) {
+        return(rbind(x, y))
+    }
+    if (nrow(x) == nrow(y)) {
+        ## Have to watch out for x or y having duplicated variable names!
+        result <- cbind(x, y)
+        commonNames <- intersect(xNames, yNames)
+        if (length(commonNames) > 0) {
+            ## Fix up names of x and y before cbind
+            names(x)[match(commonNames, xNames)] <- paste(commonNames, "x", sep=".")
+            names(y)[match(commonNames, yNames)] <- paste(commonNames, "y", sep=".")
+        }
+        return(cbind(x, y))
+    }
+    stop("%+%: Incompatible types for x and y")
+}
+```
+
+Test that it works correctly for some inputs using `identical` which
+returns `TRUE` if two passed arguments are identical. So if your code
+is correct, the result of evaluating these test chunks should be
+`TRUE`. Until then the results will be `FALSE`.
+
+```{r q_3_test1, eval = TRUE, error = TRUE}
+x <- data.frame(a1 = 1:3, b1 = letters[1:3], stringsAsFactors = FALSE)
+identical(dim(x %+% x), c(2L * nrow(x), ncol(x)))
+```
+
+```{r q_3_test2, eval = TRUE, error = TRUE}
+x <- data.frame(a1 = 1:3, b1 = letters[1:3], stringsAsFactors = FALSE)
+y <- data.frame(a2 = 4:6, b2 = letters[4:6], stringsAsFactors = FALSE)
+identical(dim(x %+% y), c(nrow(x), ncol(x) + ncol(y)))
+identical(names(x %+% y), c(names(x), names(y)))
+```
+
+```{r, q_3_test3, eval = TRUE, error = TRUE}
+x <- data.frame(a1 = 1:3, b1 = letters[1:3], stringsAsFactors = FALSE)
+z <- data.frame(a1 = 4:6, b2 = letters[4:6], stringsAsFactors = FALSE)
+identical(dim(x %+% z), c(nrow(x), ncol(x) + ncol(z)))
+identical(names(x %+% z), c("a1.x", "b1", "a1.y", "b2"))
+```
+
+Also check that `data.frame(a1 = 1:2) %+% data.frame(b1 = 1L)` throws an error.
+
+## Session Info
+
+Leave everything below as is.
+
+```{r}
+sessionInfo()
+```

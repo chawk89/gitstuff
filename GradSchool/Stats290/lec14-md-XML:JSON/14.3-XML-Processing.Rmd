@@ -1,0 +1,666 @@
+---
+title: 14.3 XML Processing
+output:
+     slidy_presentation
+---
+
+```{r, echo = FALSE, message = FALSE}
+## Install a package if not already installed
+installIfNeeded <- function(packages, ...) {
+    toInstall <- packages[!(packages %in% installed.packages()[, 1])]
+    if (length(toInstall) > 0) {
+        install.packages(toInstall, repos = "https://cloud.r-project.org")
+    }
+}
+
+## Ensure packages exist and activate them
+needPackages <- function(packages) {
+    installIfNeeded(packages)
+    for (x in packages) {
+        library(x, character.only = TRUE)
+    }
+}
+needPackages(c("grid", "png",
+               "tidyverse", "xml2", "rvest",
+               "wordcloud", "wordcloud2",
+               "RColorBrewer", "tm"))
+```
+
+Here are the RSS feeds of some news organizations.
+
+- [CNN](http://rss.cnn.com/rss/cnn_topstories.rss) and
+- [New York Times](http://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml)
+- [BBC](http://feeds.bbci.co.uk/news/rss.xml?edition=us).
+
+We will explore reading, cleaning and manipulating the data for the
+following tasks.
+
+1. Figure out how many stories are there in each RSS feed.
+2. What percent of the stories relate to the president?
+3. Think of a good way to organize all of news data for further
+   processing.
+4. Visualize the focus of the stories in a simple way by creating a
+   wordcloud for the three sites.
+
+___
+
+## 14.3.1. Understand the XML structure
+
+Let us try to understand how the RSS feed data actually looks. You
+would think that by just visiting the RSS feed site, you might be able
+to discern the structure. Unfortunately, this is not very
+straightforward since most RSS feed sites detect that a browser is
+being used and automatically present the contents as a web
+page. Furthermore, browsers will detect some style elements and
+prevent proper loading for safety reasons. So sometimes a manual
+editing is needed to view the structure. For example, for the BBC and
+CNN sites below, I had to delete the `xml-stylesheet` element to
+render properly in my browser.
+
+
+There are nice XML XML viewer plugins to view XML. One is called
+[XV](https://chrome.google.com/webstore/detail/xv-%E2%80%94-xml-viewer/eeocglpgjdpaefaedpblffpeebgmgddk?hl=en)
+and configure its options to intercept any RSS feeds in a
+browser. Then, if you open the [CNN
+URL](http://rss.cnn.com/rss/cnn_topstories.rss) in a browser, the
+structure will be shown as in the picture above.
+
+Later, when we talk about XPath, you will find tools like [Selector
+Gadget](http://selectorgadget.com/) and [XPath
+Helper](https://chrome.google.com/webstore/detail/xpath-helper/hgimnogjllphhhkhlmebbmlgjoejdpjl?hl=en)
+very useful for inspecting the page content and narrowing to parts of
+your XML document in the browser.
+
+___
+
+## 14.3.2 The Actual XML structure
+
+So here are pictures with the structure for each site.
+
+### CNN RSS Structure
+
+```{r, echo = FALSE}
+library(grid)
+img <- readPNG("cnn_rss.png")
+grid.raster(img)
+```
+
+___
+
+### NYTimes RSS Structure
+
+```{r, echo = FALSE}
+img <- readPNG("nyt_rss.png")
+grid.raster(img)
+```
+
+___
+
+### BBC RSS Structure
+
+```{r, echo = FALSE}
+library(grid)
+img <- readPNG("bbc_rss.png")
+grid.raster(img)
+```
+
+
+___
+
+### XPath Expressions
+
+A quick examination shows that the stories are marked up using
+`<item>` tags. And within an item, the headline is marked up with
+`<title>` and the summary with `<description>`.
+
+For our exercise, we are only interested in parts of the XML tree
+containing these tags; the rest of the data is to be ignored. This
+means we need a way to match part of the tree of interest to us. We do
+this in fashion analogous to how we locate files or folders in a
+computer.
+
+To specify the `iTunes` subfolder of your `Music` folder, we can use
+the construct (called the _path_ expression) `Music/iTunes`, where the
+`/` is used as a separator. The home directory for a user `joe` on a
+Mac, for example is `/Users/joe`.  The latter is an unambiguous
+construct since it begins with a `/` specifying the root of the
+directory structure. Continuing, the unambiguous path for user `joe`'s
+iTunes directory would be `/Users/joe/Music/iTunes`.
+
+___
+
+The analogs for titles and descriptions are `item/title` and
+`item/description` and these are called, naturally enough, _Xpath_
+expressions. So XPath allows us to search and target for information
+in XML documents using Xpath expressions.
+
+The precise Xpath constructs, however, are `/rss/channel/item/title`
+and `/rss/channel/item/description`, specifying the full pedigree of
+the tags. The starting slash indicates that we want to start from the
+root of the tree.
+
+A lazier Xpath construct would be `//item/title` for title and
+`//item/description` for description. The double slashes indicate that
+we are not specifying what may occur between the two slashes. Thus
+`/foo/item/title` would be a match and included as would
+`/bar/item/title`. Thus `//item/title` shortcut ensures that we would
+match _every_ `title` tag that is a child of an `item` tag, no matter
+how deep or where in the tree it occurs. (Note that this may not be
+what one desires in every situation, but it would certainly suffice in
+our case since the title tag is always a child of an item tag.)
+
+Relative Xpaths are also useful.  Often, selects a set of
+nodes that match a pattern, and all further processing is related to
+children of these selected nodes. Then relative paths, such as
+`./title`  or the less specific `.//title` once you have selected all
+item nodes in the XML document.
+
+Armed with this, we can proceed.
+
+___
+
+## 14.3.3. How many stories?
+
+We will use a library called `xml2` to handle the processing of the
+RSS XML data. So we load the library and call the `read_xml` function
+from `xml2` to read the data, starting with CNN
+
+```{r}
+library(xml2)
+cnn_url <- 'http://rss.cnn.com/rss/cnn_topstories.rss'
+cnn_xml <- read_xml(x = cnn_url)
+```
+
+___
+
+We parse out the titles and descriptions using the Xpath expressions
+using the `xml_find_all` function.
+
+```{r}
+title_xpath <- "/rss/channel/item/title"
+description_xpath <- "/rss/channel/item/description"
+cnn_titles <- xml_find_all(x = cnn_xml, xpath = title_xpath)
+print(cnn_titles)
+```
+
+___
+
+Ok, we've narrowed down the nodes, but we still find the printed items
+containing the markup tags like `<title>` and `<description>`. The
+function `xml_contents` will remove that for us.
+
+```{r}
+cnn_titles <- xml_contents(x = cnn_titles)
+print(cnn_titles)
+```
+
+Hmmm, better, but not there yet. We need to strip the `CDATA`
+sections.  (What are these, you may ask. Recall that these are parsed
+character data, that is, data within data; for example, it can be used
+stuff XML inside XML! Here they are used to stuff arbitrary text data
+which may further contain other `<` characters and therefore it is
+safest to use `CDATA`!). Enter `xml_text`.
+
+```{r}
+cnn_titles <- xml_text(x = cnn_titles)
+print(cnn_titles)
+```
+
+There, finally.
+
+___
+
+### A Pipeline Approach
+
+Note that we had to call a series of functions in order to process
+this data and that naturally fits into the pipeline pattern. Thus, all
+of the above processing may be succinctly performed using the piping
+operator `%>%`:
+
+```{r}
+library(magrittr)
+cnn_titles <- cnn_xml %>%
+    xml_find_all(xpath = title_xpath) %>%
+    xml_contents %>%
+    xml_text
+```
+
+___
+
+We can repeat this for the NYT and BBC.
+
+```{r}
+## NYT
+nyt_url<- 'http://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml'
+nyt_xml <- read_xml(x = nyt_url)
+nyt_titles <- nyt_xml %>%
+    xml_find_all(xpath = title_xpath) %>%
+    xml_contents %>%
+    xml_text
+
+## BBC
+bbc_url<- 'http://feeds.bbci.co.uk/news/rss.xml?edition=us'
+bbc_xml <- read_xml(x = bbc_url)
+bbc_titles <- bbc_xml %>%
+    xml_find_all(xpath = title_xpath) %>%
+    xml_contents %>%
+    xml_text
+```
+
+___
+
+So the answer to question 1.
+
+```{r}
+cat("# CNN Stories:",
+    length(cnn_titles),
+    "# NYT Stories:",
+    length(nyt_titles),
+    "# BBC Stories:",
+    length(bbc_titles),
+    "\n")
+```
+
+## 14.3.4. What percent of stories relate to impeachment or corona virus?
+
+This requires us to work with the story content and so we will get the
+descriptions first, following the same methods above.
+
+```{r}
+cnn_descriptions <- cnn_xml %>%
+    xml_find_all(xpath = description_xpath) %>%
+    xml_contents %>%
+    xml_text
+
+nyt_descriptions <- nyt_xml %>%
+    xml_find_all(xpath = description_xpath) %>%
+    xml_contents %>%
+    xml_text
+
+bbc_descriptions <- bbc_xml %>%
+    xml_find_all(xpath = description_xpath) %>%
+    xml_contents %>%
+    xml_text
+```
+
+___
+
+We'll assume that the word we are looking for is _Trump_ or
+_president_, although this approach isn't perfect, since it will
+capture Ivanka Trump as well as president of some other country.
+
+This is a common enough task: looking for an occurrence for a text
+pattern in a corpus or data. So our search is for very simple
+strings. By default, the R `grep` function will return those indices
+where a match occurs and `grepl` will return `TRUE` if match, `FALSE`
+if not.  See below.
+
+```{r}
+regex  <- "trump|president|impeachment|schiff|corona|virus"
+cnn_mentions <- sum(grepl(regex, cnn_descriptions, ignore.case = TRUE))
+nyt_mentions <- sum(grepl(regex, nyt_descriptions, ignore.case = TRUE))
+bbc_mentions <- sum(grepl(regex, bbc_descriptions, ignore.case = TRUE))
+
+cat("CNN mentions:",
+    cnn_mentions/length(cnn_titles),
+    "NYT mentions:",
+    nyt_mentions/length(nyt_titles),
+    "BBC mentions:",
+    bbc_mentions/length(bbc_titles),
+    "\n")
+```
+
+___
+
+## 14.3.5. Organize the data
+
+Since the number of stories are different for the various sites, one
+obvious way is to create a separate data frame for each. 
+
+```{r}
+library(tibble)
+cnn <- tibble(title = cnn_titles, description = cnn_descriptions)
+nyt <- tibble(title = nyt_titles, description = nyt_descriptions)
+bbc <- tibble(title = bbc_titles, description = bbc_descriptions)
+
+length(cnn_titles)
+length(nyt_titles)
+```
+
+However, it is obvious that this is unsatisfactory because the entire
+data is in three different places.  It would better to aim for a
+_single tidy_ data set.
+
+A natural construct for a single data frame is to add a column for
+the site (`CNN` or `NYT` or `BBC`) in addition to the `title` and
+`description` columns as above.
+
+```{r}
+site <- c(rep("CNN", length(cnn_titles)),
+          rep("NYT", length(nyt_titles)),
+          rep("BBC", length(bbc_titles)))
+news <- tibble(site = site,
+               title = c(cnn_titles, nyt_titles, bbc_titles),
+               description = c(cnn_descriptions, nyt_descriptions, bbc_descriptions))
+tibble::glimpse(news)
+```
+
+___
+
+## 14.3.6. Wordcloud
+
+Word clouds are a popular way to describe topic areas that textual
+matter pertains to: the more frequent a term, the more prominently it
+is displayed in a word cloud.
+
+For this purpose, we will make use of some packages for processing
+data, (`dplyr`), for text mining (`tm` and `tm.plugin.webmining`) and
+for generating word clouds (`wordcloud`).
+
+```{r}
+library(dplyr)
+library(tm)
+library(rvest)
+library(wordcloud)
+```
+
+___
+
+Our goal is to take all the descriptions from the CNN articles and
+combine them into one long string of words. Here are the steps.
+
+- Filter rows including only those pertaining to the CNN site:
+  `filter( site == "CNN" )`
+- Select the `description` column and disregard all others:
+  `select( description )`
+- Summarize, i.e., generate only one value by concatenating all the
+  descriptions and name the summary `words`:
+  `summarize(words = paste(description, collapse = " "))`
+
+The last invocation of the `paste` command concatenates the
+descriptions with a space (`" "`) in between.
+
+
+```{r}
+library(dplyr)
+cnn_words <- news %>%
+    filter( site == "CNN") %>% 
+    select( description) %>%
+    summarize(words = paste(description, collapse = " "))
+```
+
+Now we can just focus on the concatenated string:
+
+```{r}
+cnn_words <- cnn_words$words
+```
+
+___
+
+### Removing HTML Markup
+
+If you glimpse back at the news tibble, you see that there are a whole
+bunch of HTML markup and crud in addition to the words. So we need to
+clean them up. We also want to remove some common words that are not
+of interest.
+
+The `rvest` package provides a facility to remove HTML markup. For
+example,
+
+```{r}
+library(rvest)
+'Rvest, please <a href="http://foo.com">REMOVE STUFF AROUND ME</a>' %>%
+    read_html %>%
+    html_text
+
+?rvest
+```
+will remove the HTML markup. Note that this approach does not work
+with text that does not contain HTML! So we have to detect if there is
+HTML. If it is there, we should remove it, else we should do nothing.
+
+This offers us an opportunity to write a small (simplistic) function
+that will do the job. We exploit the the `grepl` function we saw
+earlier that detects whether a pattern exists or not in strings.
+
+```{r}
+stripHTMLIfPresent <- function(string) {
+    if (grepl("<.*?>", string)) {
+        html_text(read_html(string))
+    } else {
+        string
+    }
+}
+```
+
+Read the above function as follows: if `string` contains any number of
+characters between angled brackets, it contains HTML so strip HTML
+stuff, else just return it unmodified. This will do for us.
+
+___
+
+### Handling Internationalization
+
+Next, many sites use internationalization, which means the text in the
+descriptions is not just plain ASCII, but includes some odd characters
+such as `<U+201C>`.
+
+For example, the apostrophe in `Trump's` is often encoded as a Unicode
+string. This means that code that constructs word clouds can miscount
+the occurrence of the words.
+
+The easiest way to handle this problem is to detect if the encoding of
+a text is `UTF-8` and convert it to ASCII, and set all such characters
+to the empty string. We do that in the invocation of `iconv` below
+where `sub` is set to the empty string.
+
+___
+
+### Handling Punctuation 
+
+Next the `tm` package provides a way of removing punctuation
+(`removePunctuation`) and some words not of interest, the so called
+`stopwords` function. You can examine what these stop words are.
+
+```{r}
+print(stopwords())
+```
+The call `stopwords('SMART')` that provides a larger set of stop words
+and so it makes sense to use the union set of the two to really clean
+up. Some sites also include the day of the week (Monday, Tuesday,
+etc.), so let's include those as well.
+
+```{r}
+our_stopwords <- union(stopwords(), stopwords('SMART'))
+our_stopwords <- union(our_stopwords,
+                       c("sunday", "monday", "tuesday", "wednesday",
+                         "thursday", "friday", "saturday"))
+```
+
+Also, to make things more compact in the pipeline below, we have used
+the `with` function in R which evaluates an expression within the
+context of a data frame: `with(data.frame(x = 1, y = 2), x)` will
+return the value of `x` which is 1.
+
+___
+
+Finally, we can handle all three sites. 
+
+### CNN
+
+```{r}
+cnn_words <- news %>%
+    filter( site == "CNN") %>%
+    select( description) %>%
+    summarize(words = paste(description, collapse = " ")) %>%
+    with(words) %>%
+    stripHTMLIfPresent %>%
+    removePunctuation %>%
+    tolower() %>%
+    removeWords(our_stopwords) %>%
+    iconv(from = "UTF-8", to = "ASCII", sub = "")
+wordcloud(words = cnn_words, min.freq = 2, max.words = 25, random.order = FALSE)
+```
+
+### NYT
+
+```{r}
+nyt_words <- news %>%
+    filter( site == "NYT") %>%
+    select( description) %>%
+    summarize(words = paste(description, collapse = " ")) %>%
+    with(words) %>%
+    stripHTMLIfPresent %>%
+    removePunctuation %>%
+    tolower() %>%
+    removeWords(our_stopwords) %>%
+    iconv(from = "UTF-8", to = "ASCII", sub = "")
+wordcloud(words = nyt_words, min.freq = 2, max.words = 25, random.order = FALSE)
+```
+
+### BBC
+
+```{r}
+bbc_words <- news %>%
+    filter( site == "BBC") %>%
+    select( description) %>%
+    summarize(words = paste(description, collapse = " ")) %>%
+    with(words) %>%
+    stripHTMLIfPresent %>%
+    removePunctuation %>%
+    tolower() %>%
+    removeWords(our_stopwords) %>%
+    iconv(from = "UTF-8", to = "ASCII", sub = "")
+wordcloud(words = bbc_words, min.freq = 2, max.words = 25, random.order = FALSE)
+```
+
+___
+
+## 14.3.7. Better Colors
+
+A package called `RColorBrewer` makes it very easy to generate color
+combinations to display divergence, or sequential trends etc.
+
+
+```{r}
+library(RColorBrewer)
+palette <- brewer.pal(n = 9, name="Blues")
+```
+
+Our palette has 9 blue colors varying in intensity of blueness.
+
+___
+
+### CNN
+
+```{r}
+wordcloud(words = cnn_words, min.freq = 2, max.words = 25, random.order = FALSE, colors = palette)
+```
+
+___
+
+### NYT
+
+```{r}
+wordcloud(words = nyt_words, min.freq = 2, max.words = 25, random.order = FALSE, colors = palette)
+```
+
+___
+
+### BBC
+
+```{r}
+wordcloud(words = bbc_words, min.freq = 2, max.words = 25, random.order = FALSE, colors = palette)
+```
+
+___
+
+### Side by side
+
+Using our knowledge of `par` command, let us plot these side by side.
+
+```{r}
+opar <- par(mfrow=c(1, 3))
+wordcloud(words = cnn_words, min.freq = 2, max.words = 25, random.order = FALSE, colors = palette)
+wordcloud(words = nyt_words, min.freq = 2, max.words = 25, random.order = FALSE, colors = palette)
+wordcloud(words = bbc_words, min.freq = 2, max.words = 25, random.order = FALSE, colors = palette)
+par(opar)
+```
+
+___
+
+## 14.3.8. Javascript Wordcloud
+
+The package `wordcloud2` offers a Javascript wordcloud that looks
+better. Let us try that.  Note, however, that these things do not
+render nicely in a markdown document, so you can run these directly
+and reload the page if necessary. 
+
+___
+
+### CNN
+
+```{r}
+library(wordcloud2)
+library(stringr)
+cnn_freq <- cnn_words %>%
+    ## Split by words
+    str_split(pattern = boundary("word")) %>%
+    ## Generate a frequency table
+    table %>%
+    ## Convert to data frame, renaming columns
+    as.data.frame(col.names = c("word", "freq"))
+## Plot the word cloud in a browser
+wordcloud2(cnn_freq)
+```
+
+___
+
+### NYT
+
+```{r}
+nyt_freq <- nyt_words %>%
+    ## Split by words
+    str_split(pattern = boundary("word")) %>%
+    ## Generate a frequency table
+    table %>%
+    ## Convert to data frame, renaming columns
+    as.data.frame(col.names = c("word", "freq"))
+## Plot the word cloud in a browser
+wordcloud2(nyt_freq)
+```
+
+___
+
+### NYT
+
+```{r}
+bbc_freq <- bbc_words %>%
+    ## Split by words
+    str_split(pattern = boundary("word")) %>%
+    ## Generate a frequency table
+    table %>%
+    ## Convert to data frame, renaming columns
+    as.data.frame(col.names = c("word", "freq"))
+## Plot the word cloud in a browser
+wordcloud2(bbc_freq)
+```
+
+___
+
+## 14.3.9. Summary
+
+We saw how XML processing can be done using the package `xml2`. We
+also some details of the XPath, a language used for picking off parts
+of the XML document using a Document Object Model (DOM).
+
+Many organizations provide data in XML format. While verbose, it has
+the advantage of a reliable structure that can be computed against.
+
+---
+
+## 14.3.10. Session Info
+
+```{r}
+sessionInfo()
+```

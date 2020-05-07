@@ -1,0 +1,13 @@
+{
+  "args": {}, 
+  "headers": {
+    "Accept": "application/json, text/xml, application/xml, */*", 
+    "Accept-Encoding": "deflate, gzip", 
+    "Cookie": "a=1; b=1", 
+    "Host": "httpbin.org", 
+    "User-Agent": "libcurl/7.54.0 r-curl/4.3 httr/1.4.1", 
+    "X-Amzn-Trace-Id": "Root=1-5e589197-ec4726507e047cdde9f21ab2"
+  }, 
+  "origin": "75.25.118.61", 
+  "url": "http://httpbin.org/get"
+}

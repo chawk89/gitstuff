@@ -1,0 +1,76 @@
+---
+title: "9.3. R Package Information"
+output:
+     slidy_presentation
+---
+
+Take a look at the [CRAN](https://cloud.r-project.org) page.
+
+- Click on the Packages link, to see the list of currently available
+  packages. 
+
+- Let us look at the
+  [`dplyr`](https://cloud.r-project.org/package=dplyr) package. As you
+  scroll down the `dplyr` package page you see a few file names such
+  as `dplyr_0.8.3.tar.gz` etc.
+  
+## 9.3.1. Terminology
+
+1. The `dplyr_0.8.3.tar.gz` file is the source of the package. In
+   other words, this was the file that was created by the author of
+   the package and uploaded to CRAN. It was produced using package
+   building tools that R provides as we shall see later.
+
+   This file is also called the _source_ package.
+
+2. The files `dplyr_0.8.3.zip` and `dplyr_0.8.3.tgz` are _binary_
+   packages built using the source package. They are for Windows and
+   Macs respectively.
+
+   These are _binary_ packages. They are provided so that anyone
+   without access to the R developer toolchain can easily install and
+   use them.
+
+The source and binary packages are quite different. Note that nothing
+prevents you from downloading each of these files and unzipping or
+untarring them as needed. (The `.tgz` is also a tarred and gzipped
+file, just like the `.tar.gz` file.)
+
+__Exercise__: Examine all three files and see how they are different.
+
+
+## 9.3.2. What happens when you install packages?
+
+When you try to install a package on a Mac or Windows, either via the
+RStudio menu, or equivalently, using `install.packages()`, R downloads
+the appropriate binary for your R version and installs it.  If it
+doesn't find a suitable binary, it might offer you the option of
+installing from the source.
+
+What does _installing from the source_ mean?
+
+It means that the R development tool chain will be used to build the
+source package into a binary suitable for your platform.
+
+That is, if the package contains C/C++ or Fortran code, they will be
+compiled using compilers available on your machine. If you don't have
+those, you won't succeed.
+
+Whether you have C/C++/Fortran code or not, the documentation will be
+compiled using TeX/LaTeX and so you better have those as well.
+
+On Unix machines, all packages are installed from source! That is why,
+for example, on Ubuntu, you need to
+
+```
+sudo apt-get install r-base-dev
+```
+to get all the build tools needed to build and install packages. (We
+described the equivalents for Macs and PCs in assignment 0 as well as
+earlier.)
+
+## Session Info
+```{r}
+sessionInfo()
+```
+

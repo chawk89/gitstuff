@@ -1,0 +1,217 @@
+---
+title: "9.2. R Packages"
+output:
+     slidy_presentation
+---
+```{r requirements, echo = FALSE, message = FALSE}
+## Install a package if not already installed
+installIfNeeded <- function(packages, ...) {
+    toInstall <- packages[!(packages %in% installed.packages()[, 1])]
+    if (length(toInstall) > 0) {
+        install.packages(toInstall, repos = "https://cloud.r-project.org")
+    }
+}
+
+## Ensure packages exist and activate them
+needPackages <- function(packages) {
+    installIfNeeded(packages)
+    for (x in packages) {
+        library(x, character.only = TRUE)
+    }
+}
+needPackages(c("tidyverse", "pryr"))
+```
+
+
+By now you know that R provides many useful functions for creating,
+building, manipulating and learning about packages.  
+
+Packages can be installed from CRAN via via `install.packages()`
+function. See help on that function. (Bioconductor has its own way of
+installing packages using a different function.) 
+
+Later, we'll see how you can install packages you develop (before it
+goes on CRAN) for testing etc.
+
+A quick tour.
+
+## 9.2.1. What packages are installed?
+
+```{r}
+x <- installed.packages()
+str(x)
+colnames(x)
+head(rownames(x))
+```
+
+## 9.2.2. R Repositories
+
+By default, you will be given a chance to set a repository or one will
+be set for you. The site [CRAN](https://cloud.r-project.org) shows all
+the repos you can use. The cloud repository makes most sense!
+
+You can set respository using `setRepositories()` but a more common
+way is to set an option:
+
+```{r}
+options(repos = "https://cloud.r-project.org")
+```
+
+will always work.
+
+
+## 9.2.3. What packages are available on CRAN at this instant?
+
+```{r}
+y <- available.packages()
+dim(y)
+```
+
+```{r}
+head(y, 2)
+tail(y, 2)
+```
+
+Note that you can compute on any of this information. In `ass2.Rmd`,
+there is a code chunk as follows.
+
+## 9.2.4. What packages are installed on my machine?
+
+```{r}
+y <- installed.packages()
+dim(y)
+```
+
+## 9.2.5. Install/Download/Remove Packages
+
+R provides `install.packages()`, `download.packages()` and
+`remove.packages()` to perform these functions.
+
+## 9.2.6. Installing needed packages on demand
+
+Note that you can compute on any of this information. In the markdowns
+for this class, there is a code chunk as below. 
+
+```{r, eval = FALSE}
+## Install a package if not already installed
+installIfNeeded <- function(packages, ...) {
+    toInstall <- packages[!(packages %in% installed.packages()[, 1])]
+    if (length(toInstall) > 0) {
+        install.packages(toInstall, repos = "https://cloud.r-project.org")
+    }
+}
+
+## Ensure packages exist and activate them
+needPackages <- function(packages) {
+    installIfNeeded(packages)
+    for (x in packages) {
+        library(x, character.only = TRUE)
+    }
+}
+needPackages(c("tidyverse", "pryr"))
+```
+
+What is it doing? It ensures that the libraries `tidyverse` is
+installed before proceeding. Furthermore, it will only install
+`tidyverse` if it is not already installed.
+
+Note the use of the `...` argument that is used to pass on the `repos`
+argument!
+
+## 9.2.7. Where does my R look for packages?
+
+Where actually are the installed packages on my machine?
+
+```{r}
+.libPaths()
+.Library
+.Library.site
+```
+
+From the help:
+
+> `.Library` is a character string giving the location of the
+> default library, the `library` subdirectory of `R_HOME`.
+>
+> `.Library.site` is a (possibly empty) character vector giving the
+> locations of the site libraries, by default the `site-library`
+> subdirectory of `R_HOME` (which may not exist).
+>
+> `.libPaths` is used for getting or setting the library trees that
+> R knows about (and hence uses when looking for packages).
+
+## 9.2.8. Add my own package tree.
+
+One can manipulate library paths during development, for testing,
+before installing in a standard place.
+
+For example, I may want to install my packages in my home directory
+under a directory `RLIBS` before I actually install it for all users
+on my computer.
+
+```{r}
+.libPaths("~/RLIBS")
+.libPaths()
+```
+
+On windows and Unix machines, when you install packages, you are given
+a choice to add a local package tree in your home directory. This is
+useful because you may not have permission to install in the system
+areas.
+
+## 13.2.2.9. Information about specific packages
+
+```{r}
+packageDescription("ggplot2")
+packageVersion("ggplot2")
+```
+
+## 9.2.10. Learning to use a package
+
+To use a package interactively, one uses `library()` or
+  `require()`. Both will modify the search path, but `require` will
+  return a logical value indicating if the loading was successful.
+
+Sometimes, you want to know all the exported and documented objects/functions
+in a package.
+
+```{r}
+library(help = "tibble")
+```
+works, but is not always convenient. Often, one has to examine the
+help page on each function for details.
+
+The above will also display messages on _vignettes_ etc. Vignettes are
+the modern way to introduce the package to a user. Highly
+recommended.
+
+```{r, eval = FALSE}
+vignette("tibble", package = "tibble")
+```
+
+You don't need to attach the package to look at a vignette.
+
+## 9.2.11. Which package exports a specific function?
+
+For example, which package provides `aggregate`?
+
+```{r}
+packageName(environment(aggregate))
+```
+
+Of course, in the above I am assuming that you have not defined your
+own `aggregate` function!
+
+The function `where` in the package `pryr` provides this info in a
+more useful format.
+
+```{r}
+installIfNeeded("pryr")
+library(pryr)
+where("aggregate")
+```
+
+## 9.2.12. Session Info
+```{r}
+sessionInfo()
+```

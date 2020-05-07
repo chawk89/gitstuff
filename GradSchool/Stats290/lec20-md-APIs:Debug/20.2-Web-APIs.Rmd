@@ -1,0 +1,465 @@
+---
+title: "20.2. Web API Calls in R"
+output: slidy_presentation
+---
+
+```{r, echo = FALSE, message = FALSE}
+## Install a package if not already installed
+installIfNeeded <- function(packages, ...) {
+    toInstall <- packages[!(packages %in% installed.packages()[, 1])]
+    if (length(toInstall) > 0) {
+        install.packages(toInstall, repos = "https://cloud.r-project.org")
+    }
+}
+
+## Ensure packages exist and activate them
+needPackages <- function(packages) {
+    installIfNeeded(packages)
+    for (x in packages) {
+        library(x, character.only = TRUE)
+    }
+}
+needPackages(c("tidyverse"))
+```
+
+
+## 20.2. Introduction
+
+Much of the world today relies on data that is made available online
+via Application Programming Interfaces (APIs). For example, Github
+makes available a set of feeds from which data can be obtained. 
+
+A bit of terminology.
+
+- The entity that accepts requests is called the _server_
+- The entity that makes the requests is called the _client_.
+
+___
+
+Examine [Github
+Feeds](https://developer.github.com/v3/activity/feeds/). Things to
+note:
+
+- There are several feeds
+- Some are public and some require authentication
+- The results are JSON
+
+Focusing on the `Events` link on the right, you can see that you can
+get details on several types of events. 
+
+For example, to obtain basic list of public events, the call is to a
+specific form of a URL. 
+
+```
+GET /events
+```
+
+The part following the verb (`/events`) is called an _end-point_ and
+they are the fundamental concepts in RESTful APIs. _REST_ here is an
+acronym for (Representational State Transfer) that web applications
+use with HTTP protocol. 
+
+For us, it is enough to know that the HTTP protocol consists of
+specific _verbs_:
+
+- GET for looking up a resource
+- PUT, POST, DELETE for modifying, creating, and deletion requests
+
+Rarely will you use PUT or DELETE, so we focus on GET and POST.
+
+An important detail is that web apis are _stateless_: each
+request/response is handled on its own.
+
+___
+
+It is instructive to understand this all in the context of your
+browser. For example, in Chrome, you can choose "Developer Tools" and
+use the "Network" tab to see what requests are being made by your
+browser.  
+
+Let's examine the [Github website](https://github.com).  We will also
+use a command line client called `curl` that comes standard with MacOS
+to examine the content. (You can download that for Windows, or also
+use `wget` for example).
+
+To download the Github public events, we try:
+
+```{bash, eval = FALSE}
+curl -o events.json https://api.github.com/events
+```
+
+Notice how the above Github endpoint got prefixed with
+`https://api.github.com` to refer to an actual site.
+
+___
+
+The previous example was a fixed URL, with no real`a
+flexibility. Consider now, the Open FDA website that provides adverse
+event reports on drugs. This is described
+[here](https://open.fda.gov/apis/try-the-api/).
+
+
+Suppose we want, say 5, adverse reports for today. 
+
+
+```{bash, eval = FALSE}
+curl -o fda.json 'https://api.fda.gov/drug/event.json?limit=3'
+```
+
+Here we are asking for a maximum of 3 reports (and therefore, we can
+pass parametrize our requests). 
+
+```{r}
+library(jsonlite)
+d <- fromJSON('https://api.fda.gov/drug/event.json?search=&limit=3')
+```
+___
+
+```{r}
+str(d)
+```
+
+___
+
+Thus, you can programmatically construct a URL to call that API end
+point.  Our goal is to do this in R.
+
+In each case, the client `curl` or `R` made the request.
+
+Then the server responded with something and sent data back to the
+server. The data it responded with was JSON.
+
+So these are two basic components of the There are two important parts
+to http: 
+
+- the __request__, the data sent to the server
+- the __response__, the data sent back from the server. 
+
+The request can include parameters. In the case of simple parameters,
+these can be passed along with GET requests by means of the `?` and
+`&` combination. 
+
+However, if we have a large number of parameters, or if the parameter
+to be sent is a data set for example, then the GET request becomes
+unwieldy. That is also the case when the parameter may be an image,
+which is binary data for example. There is no way to type out the
+image as a bunch of text in a URL.
+
+Our goal is to be able to perform all these activities in R.
+
+## 20.2.2 The `httr` Package
+
+What follows is almost entirely from the excellent set of `httr`
+vignettes by Hadley Wickham.
+
+To make a request, first load httr, then call `GET()` with a url:
+
+```{r}
+library(httr)
+r <- GET("http://httpbin.org/get")
+```
+
+This gives you a response object. Printing a response object gives you
+some useful information: the actual url used (after any redirects),
+the http status, the file (content) type, the size, and if it's a text
+file, the first few lines of output.
+
+```{r}
+r
+```
+
+You can pull out important parts of the response with various helper
+methods, or dig directly into the object:
+
+```{r}
+status_code(r)
+headers(r)
+glimpse(content(r))
+```
+
+## 20.2.3. The Response 
+
+The data sent back from the server consists of three parts: 
+
+- the status line
+- the headers and 
+- the body. 
+
+The most important part of the status line is the http status code: it
+tells you whether or not the request was successful. 
+
+
+## 20.2.4. The Status Code
+
+The status code is a three digit number that summarises whether or not
+the request was successful (as defined by the server that you're
+talking to). You can access the status code along with a descriptive
+message using `http_status()`:
+
+
+```{r}
+r <- GET("http://httpbin.org/get")
+# Get an informative description:
+http_status(r)
+
+# Or just access the raw code:
+r$status_code
+```
+
+A successful request always returns a status of 200. 
+
+Common errors are 404 (file not found) and 403 (permission denied). 
+
+You can automatically throw a warning or raise an error if a request
+did not succeed:
+
+```{r}
+warn_for_status(r)
+stop_for_status(r)
+```
+
+These are very useful when `httr` is used inside a function (i.e. not
+interactively) to make sure you find out about errors as soon as
+possible.
+
+## 20.2.5. The Body
+
+This is the part that is interesting to the data consumer. Access body
+of request using `content()`:
+
+*   `content(r, "text")` accesses the body as a character vector:
+
+    ```{r}
+    r <- GET("http://httpbin.org/get")
+    content(r, "text")
+    ```
+
+    httr will automatically decode content from the server using the encoding 
+    supplied in the `content-type` HTTP header. Unfortunately you can't always 
+    trust what the server tells you, so you can override encoding if needed:
+
+    ```{r, eval = FALSE}
+    content(r, "text", encoding = "ISO-8859-1")
+    ```
+
+    If you're having problems figuring out what the correct encoding 
+    should be, try `stringi::stri_enc_detect(content(r, "raw"))`.
+
+*   For non-text requests, you can access the body of the request as a 
+    raw vector:
+
+    ```{r}
+    content(r, "raw")
+    ```
+    
+    This is exactly the sequence of bytes that the web server sent, so this is
+    the highest fidelity way of saving files to disk:
+    
+    ```{r, eval = FALSE}
+    bin <- content(r, "raw")
+    writeBin(bin, "myfile.txt")
+    ```
+
+*   httr provides a number of default parsers for common file types:
+
+    ```{r}
+    # JSON automatically parsed into named list
+    str(content(r, "parsed"))
+    ```
+    
+    See `?content` for a complete list.
+    
+    These are convenient for interactive usage, but if you're writing an API
+    wrapper, it's best to parse the text or raw content yourself and check it
+    is as you expect. See the API wrappers vignette for more details.
+
+
+## 20.2.6. The headers
+
+Access response headers with `headers()`:
+
+```{r}
+headers(r)
+```
+
+This is basically a named list, but because http headers are case
+insensitive, indexing this object ignores case:
+
+```{r}
+headers(r)$date
+headers(r)$DATE
+```
+
+## 20.2.7. Cookies
+
+Access cookies in a similar way:
+
+```{r}
+r <- GET("http://httpbin.org/cookies/set", query = list(a = 1))
+cookies(r)
+```
+
+Cookies are automatically persisted between requests to the same
+domain:
+
+```{r}
+r <- GET("http://httpbin.org/cookies/set", query = list(b = 1))
+cookies(r)
+```
+
+## 20.2.8. The Request
+
+Like the response, the request consists of three pieces: 
+
+- a status line
+- headers and 
+- a body. 
+
+The status line defines the http method (GET, POST, etc) and
+the url. 
+
+You can send additional data to the server in the url (with the query
+string), in the headers (including cookies) and in the body of
+`POST()` for example.
+
+## 20.2.9. The URL Query String
+
+A common way of sending simple key-value pairs to the server is the
+query string: e.g. `http://httpbin.org/get?key=val`. 
+
+`httr` allows you to provide these arguments as a named list with the
+`query` argument. 
+
+For example, if you wanted to pass `key1=value1` and `key2=value2` to
+`http://httpbin.org/get` you could do:
+
+```{r}
+r <- GET("http://httpbin.org/get", 
+  query = list(key1 = "value1", key2 = "value2")
+)
+content(r)$args
+```
+
+___
+
+### Example 
+
+For the Open FDA example with 5 records:
+
+```{r}
+r <- GET("https://api.fda.gov/drug/event.json/", 
+         query = list(search = "",  limit = "5")
+         )
+```
+
+If we wished to do process this data, we do do the following.
+
+```{r}
+ae_content  <- content(r)
+records  <- ae_content$results
+
+print(length(records))  ## should be 5
+```
+
+Now we just gather the data in a format that works for us.
+
+```{r}
+
+patient_ids  <- 1:5  ## We make up ids
+extract_patient_info  <- function(id, records) {
+    patient  <- records[[id]]$patient
+    patient_age  <- patient$patientonsetage
+    patient_sex = patient$patientsex
+    ## Patient could have many reactions
+    reactions  <- lapply(patient$reaction, function(x) x$reactionmeddrapt)
+    product <- patient$drug[[1]]$medicinalproduct
+    ## Return a list of things we care about
+    list(id = id, age = patient_age, sex = patient_sex,
+         drug_reactions = reactions, drug_product = product)
+}
+
+## Adverse events info
+ae_info  <- lapply(patient_ids, extract_patient_info, records = records)
+```
+
+We can take a look at the results
+
+```{r}
+str(ae_info)
+```
+
+___
+
+Note that `httr::GET` will handle `NULL` elements and quote things
+appropriately: any `NULL` elements are automatically dropped from the
+list, and both keys and values are escaped automatically.
+
+```{r}
+r <- GET("http://httpbin.org/get", 
+  query = list(key1 = "value 1", "key 2" = "value2", key2 = NULL))
+content(r)$args
+```
+
+Note the format of `key 2` which has spaces in it.
+
+
+## 20.2.10. Request body
+
+When `POST()`ing, you can include data in the `body` of the
+request. `httr` allows you to supply this in a number of different
+ways. The most common way is a named list:
+
+```{r}
+r <- POST("http://httpbin.org/post", body = list(a = 1, b = 2, c = 3))
+```
+
+You can use the `encode` argument to determine how this data is sent to the server:
+
+```{r}
+url <- "http://httpbin.org/post"
+body <- list(a = 1, b = 2, c = 3)
+
+# Form encoded
+r <- POST(url, body = body, encode = "form")
+# Multipart encoded
+r <- POST(url, body = body, encode = "multipart")
+# JSON encoded
+r <- POST(url, body = body, encode = "json")
+```
+
+To see exactly what's being sent to the server, use
+`verbose()`. Unfortunately due to the way that `verbose()` works,
+knitr can't capture the messages, so you'll need to run these from an
+interactive console to see what's going on.
+
+```{r, eval = FALSE}
+POST(url, body = body, encode = "multipart", verbose()) # the default
+POST(url, body = body, encode = "form", verbose())
+POST(url, body = body, encode = "json", verbose())
+```
+
+___
+
+You can also send files off disk:
+
+```{r, eval = FALSE}
+POST(url, body = upload_file("mypath.txt"))
+POST(url, body = list(x = upload_file("mypath.txt")))
+```
+
+(`upload_file()` will guess the mime-type from the extension - using
+the `type` argument to override/supply yourself.)
+
+These uploads stream the data to the server: the data will be loaded
+in R in chunks then sent to the remote server. This means that you can
+upload files that are larger than memory.
+
+See `POST()` for more details on the other types of thing that you can
+send: no body, empty body, and character and raw vectors.
+
+## 20.2.11. Session Info
+
+```{r}
+sessionInfo()
+```
+

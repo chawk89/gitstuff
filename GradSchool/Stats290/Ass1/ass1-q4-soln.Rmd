@@ -1,0 +1,305 @@
+---
+title: 'Stat 290: Assignment 1: Q4'
+output:
+  html_document:
+    df_print: paged
+---
+
+## Q4 (Huffman encoding) [9 pts]
+
+  A classic programming example is Huffman encoding. See the famous
+  book by [Abelson, Sussman, and
+  Sussman](https://mitpress.mit.edu/sites/default/files/sicp/full-text/book/book-Z-H-16.html#%_sec_2.3.4). That
+  example is in Scheme but we build an R version. The main difference
+  between a purely functional implementation and the one in R is the
+  avoidance of recursion, particularly because R does not support
+  things like tail recursion. Also, we make do with generic lists in
+  R.
+
+  For this exercise, complete parts of the code below; you will need the file
+  `totf.txt` (included on coursework). For _your_
+  (not our) checking you need to make sure the file is available in
+  the same directory as this markdown.
+
+```{r q4_setup, eval = TRUE}
+##
+## Make a leaf node (also a codeTree) with given symbol and given weight
+## Just a list representation.
+makeLeaf <- function(symbol, weight)
+    list(list(symbol=symbol, weight=weight))
+
+## Leaves have no left or right sub-trees
+is.leaf <- function(object) is.null(object[[1]]$left) && is.null(object[[1]]$right)
+
+## Accessors for getting at symbol and weight
+symbol <- function(object) object[[1]]$symbol
+weight <- function(object) object[[1]]$weight
+
+##
+## Construct a codeTree with given left and right code trees
+##
+makeCodeTree <- function(left, right)
+    list(list(left=left,
+              right=right,
+              symbol=c(symbol(left), symbol(right)),
+              weight=weight(left) + weight(right)))
+
+## Left and right branch accessors
+leftBranch <- function(tree) tree[[1]]$left
+rightBranch <- function(tree) tree[[1]]$right
+
+##
+## Traverse the tree per bit
+##
+chooseBranch <- function(bit, branch) {
+    if (bit == 0)
+        leftBranch(branch)
+    else if (bit == 1)
+        rightBranch(branch)
+    else
+        stop(paste("bad bit in chooseBranch", bit))
+}
+```
+
+__4a__. Write code to create a vector of ordered frequencies from the
+    character vector \texttt{helloWorld}. (1 liner)
+
+```{r q_4a, eval = TRUE}
+helloWorld <- c("H", "e", "l", "l", "o", " ",
+                "W", "o", "r", "l", "d", "!")
+
+helloFreq <- sort(table(helloWorld))
+```
+
+__4b__. Create a list of Leaf nodes each of which represents a character
+    of the `helloWorld` vector. _Hint: `lapply`_. If you use `mapply`
+    be sure to read the documentation
+
+```{r q_4b, eval = TRUE}
+helloLeafList <- lapply(seq(helloFreq),
+                        function(i) makeLeaf(weight=helloFreq[i],
+                                             symbol=names(helloFreq)[i]))
+```
+
+or 
+
+```{r q_4b2, eval = TRUE}
+helloLeafList <- mapply(makeLeaf, names(helloFreq), helloFreq, SIMPLIFY = FALSE)
+```
+__4c__. Complete the function `encode` and `decode` (one line each).
+
+```{r q_4c_encode, eval = TRUE}
+##
+## Given a code, encode the vector of chars
+## and return a vector of integers representing bits
+##
+encode <- function(codeTree, text) {
+    result <- list()
+    n <- length(result)
+    for (ch in text) {
+        subTree <- codeTree
+        while (!is.leaf(subTree)) {
+            n <- n + 1
+            if (ch %in% symbol(leftBranch(subTree))) {
+                result[[n]] <- 0
+                subTree <- leftBranch(subTree)
+            } else {
+                result[[n]] <- 1
+                subTree <- rightBranch(subTree)
+            }
+        }
+    }
+    ## 4c. return a vector of integers
+    unlist(result)
+    ## End of 4c.
+}
+```
+
+```{r q_4c_decode, eval = TRUE}
+##
+## Given a codeTree, decode the vector of bits
+## and return a character vector
+##
+decode <- function(bits, codeTree) {
+    result <- list()
+    n <- length(result)
+    currentBranch <- codeTree
+    for (bit in bits) {
+        currentBranch <- chooseBranch(bit, currentBranch)
+        if (is.leaf(currentBranch)) {
+            n <- n + 1
+            result[[n]] <- symbol(currentBranch)
+            currentBranch <- codeTree
+        }
+    }
+    ## 4c. return a vector of characters
+    unlist(result)
+    ## End of 4c.
+}
+```
+
+__4d__. Complete the function `createCodeTree` (no more than 4 or 5 lines).
+
+```{r q_4d, eval = TRUE}
+##
+## Given a list of codeTrees ordered by weight, combine the two lowest
+## weight codeTrees and insert it in the rest of the list, preserving
+## the weight orderings
+##
+combine <- function(trees) {
+    insert <- function(item, target) {
+        if (length(target) == 0) {
+            item
+        } else {
+            x <- local({tmp <- sapply(target, weight); split(seq(target), tmp > weight(item))})
+            c(target[x[["FALSE"]]], list(item), target[x[["TRUE"]]])
+        }
+    }
+    if (length(trees) < 2)
+        trees
+    else {
+        ## Combine the first two
+        combined <- makeCodeTree(trees[[1]], trees[[2]])
+        insert(combined, trees[-(1:2)])
+    }
+}
+
+##
+## Create a single codeTree from a list of codeTrees
+## Typically arguments is a list of Leaf nodes
+## Hint: reduce to a singleton using combine
+##
+
+createCodeTree <- function(trees) {
+    ## 4d. Complete the function....
+    ## return a singleton tree
+    while(length(trees) != 1) {
+        trees <- combine(trees)
+    }
+    trees
+    ## end of 4d.
+}
+```
+
+__4e__. Create a code tree for the `helloWorld` vector.
+
+```{r q_4e, eval = TRUE}
+codeTree <- createCodeTree(helloLeafList)
+```
+
+__4f__. Encode and decode `helloWorld` and check that the
+    encoding and decoding process are consistent (3 lines max).
+
+```{r q_4f, eval = TRUE}
+encoded <- encode(codeTree, helloWorld)
+decoded <- decode(encoded, codeTree)
+identical(helloWorld, decoded)
+```
+
+__4g__. Decode the message in `testMessage` and print it as _one_
+string using the `cat` function.
+
+```{r q_4g_setup, eval = TRUE}
+testMessage <- scan(
+    textConnection(
+        "0 0 0 1 0 1 0 1 1 0 1 0 1 1 1 1 1 0 1 1 1 0 1 1 1 0 0 1 1 1 1 1 0 1 1 0 1
+        0 1 1 1 1 1 0 1 1 0 1 1 0 1 0 0 1 1 0 0 1 1 0 0 0 1 0 0 1 0 0 0 1 1 1 1 1
+        0 0 0 1 1 1 1 1 1 1 0 1 1 1 0 0 0 0 1 0 0 0 1 0 0 0 0 1 0 0 1 1 1 0 1 1 0
+        0 1 0 1 1 0 1 1 0 1 1 0 1 1 1 1 1 0 0 0 0 0 1 1 0 1 0 1 0 0 1 1 0 1 0 1 0
+        1 1 0 0 1 1 0 1 1 0 1 1 1 1 0 0 1 0 1 0 1 1 1 1 0 1 1 1 1 0 1 1 0 0 0 1 0
+        0 1 0 0 0 0 0 1 1 1 0 0 0 1 0 0 1 1 1 0 1 1 1 1 0 0 1 1 1 1 0 1 1 1 1 0 0
+        1 0 1 0 0 1 1 1 1 0 1 0 1 1 0 0 1 1 1 0 0 0 0 1 1 1 1 0 1 0 1 1 1 0 0 1 0
+        0 0 1 1 0 1 0 1 0 1 0 1 0 1 1 0 0 1 1 0 1 0 1 0 0 0 0 1 0 0 1 1 1 1 1 0 0
+        1 0 1 1 1 0 0 0 0 1 1 0 0 1 1 1 1 0 1 1 0 0 1 0 1 1 0 1 1 1 1 1 0 0 0 0 0
+        1 1 0 1 0 1 0 0 1 1 0 1 0 1 0 1 1 0 0 1 1 0 1 1 0 1 1 1 1 0 0 1 0 1 0 1 1
+        1 1 0 1 1 1 1 0 0 1 1 1 1 0 1 1 0 0 1 0 1 1 0 1 1 1 1 1 1 0 1 0 1 1 0 0 1
+        1 1 0 0 0 0 1 1 1 1 0 1 0 1 1 1 0 0 1 0 0 0 1 1 0 1 0 1 0 1 0 1 0 1 1 0 0
+        1 1 0 1 0 1 0 0 0 0 1 0 0 0 1 0 1 0 1 1 0 0 0 0 0 0 1 0 1 0 1 1 0 1 0 1 1
+        1 1 1 0 1 1 1 0 1 0 0 0 0 0 1 1 1 0 0 1 1 1 1 1 0 1 1 0 0 1 0 0 0 0 1 1 1
+        0 0 0 0 1 1 0 0 0 0 0 1 1 0 1 0 0 1 1 1 1 0 1 0 0 0 0 1 1 0 0 1 1 1 0 1 1
+        1 0 1 1 0 0 1 1 0 1 0 0 0 0 1 1 0 0 1 1 1 0 0 0 1 0 0 0 1 0 1 1 1 1 0 0 1
+        1 1 1 0 0 0 1 1 0 0 1 1 0 0 0 0 0 0 0 1 0 1 0 0 1 1 1 0 0 1 1 0 1 0 0 0 1
+        1 1 1 1 0 1 0 1 0 0 1 1 1 0 0 1 1 1 0 1 1 1 0 0 0 0 0 1 1 1 1 0 1 0 1 1 0
+        0 1 1 1 0 0 0 0 1 1 0 1 1 0 1 0 1 1 1 1 1 0 1 1 1 1 0 0 1 1 1 1 0 1 0 1 1
+        0 1 1 1 0 1 0 0 0 1 0 1 1 1 1 0 1 0 1 0 1 1 1 1 1 1 1 1 0 1 1 1 0 0 1 1 1
+        1 0 0 1 1 1 1 0 1 0 1 1 0 1 0 0 0 0 1 0 0 0 1 1 0 0 0 1 1 1 1 1 1 0 0 1 1
+        1 0 1 0 1 0 1 0 0 1 0 1 1 0 1 1 0 1 0 0 1 0 0 0 1 1 1 0 1 1 1 0 0 0 0 0 1
+        1 1 0 0 0 1 0 0 1 0 0 1 0 1 1 0 1 0 0 0 1 0 1 0 1 1 0 0 0 0 0 0 1 0 1 1 0
+        1 1 1 1 1 0 0 0 0 1 1 0 0 1 1 0 0 1 1 1 1 1 0 1 1 1 1 0 0 1 0 0 1 0 0 0 0
+        0 0 1 1 1 1 0 1 1 0 1 0 1 1 0 1 1 0 1 0 1 1 1 1 0 1 1 1 1 1 1 1 0 1 1 0 0
+        1 1 0 1 1 0 0 0 0 1 1 0 0 0 0 0 1 1 0 1 0 0 0 1 0 1 1 1 1 1 1 0 1 1 1 0 0
+        1 1 1 1 1 0 1 1 1 1 0 1 0 0 0 0 1 1 1 0 0 0 0 1 1 0 0 0 0 0 1 1 0 1 0 0 1
+        0 1 0 0 1 1 0 1 1 1 0 0 1 0 0 0 0 1 0 1 1 0 0 0"),
+    what=integer(0))
+
+testMessageFreq <- scan(
+    textConnection(
+        " 1  1  1  1  1  2  2  2  2  2  2  3  3  3  4  4  4  4  5  5  6  8  9 10 13 13 
+         14 14 15 18 22 41"),
+    what = integer(0))
+
+names(testMessageFreq) <- c("A", "E", "v", "w", "y", "-", ",", "b", "h", "I",
+                            "P", "\n", ".", "1", "0", "c", "d", "p", "f", "g",
+                            "l", "m", "u", "i", "e", "s", "o", "r", "n", "t",
+                            "a", " ")
+```
+
+```{r q_4g, eval = TRUE}
+leafList <- lapply(seq(testMessageFreq),
+                   function(i) makeLeaf(weight=testMessageFreq[i],
+                                        symbol=names(testMessageFreq)[i]))
+codeTree <- createCodeTree(leafList)
+decoded <- decode(testMessage, codeTree)
+
+cat(paste(decoded, collapse=""))
+```
+
+__4h__. Explain what happens in the lines
+```{r, eval = FALSE}
+x <- local({tmp <- sapply(target, weight); split(seq(target), tmp > weight(item))})
+c(target[x[["FALSE"]]], list(item), target[x[["TRUE"]]])
+```
+of the function `combine` in part d. Particularly state what happens for the extreme cases.
+
+```{r q_4h, eval = FALSE}
+## We split the codetrees in tree into two groups,
+## ones with weight <= that of item, and those above it.
+## The result is a list with *named* elements "FALSE" or "TRUE"
+## respectively. In the extreme cases, the list will have one
+## element rather than two, all above or all below.
+## However, by using the names to access the elements,
+## we get an empty list if no elements exist.
+## So the code won't fail.
+```
+
+__4i__. Encode and decode `totfHex` and check they encode and decode
+consistently.  Ignoring the storage of the code tree and other
+metadata, what is the approximate compression (compressed size /
+original size) you get for the _A Tale of Two Cities_ snippet? (Assume
+8 bits/character). Print this ratio.
+
+```{r q_4i_setup, eval = TRUE}
+totf <- readBin(con="totf.txt", what=raw(0), n=10^6)
+totfHex <- as.character(totf)
+```
+
+```{r q_4i, eval = TRUE}
+totfFreq <- sort(table(totfHex))
+leafList <- lapply(seq(totfFreq),
+                   function(i) makeLeaf(weight=totfFreq[i],
+                                        symbol=names(totfFreq)[i]))
+codeTree <- createCodeTree(leafList)
+encoded <- encode(codeTree, totfHex)
+decoded <- decode(encoded, codeTree)
+stopifnot(identical(totfHex, decoded))
+
+print(length(encoded)/8/length(totfHex))
+```
+
+## Session Info
+
+Leave everything below as is.
+
+```{r}
+sessionInfo()
+```

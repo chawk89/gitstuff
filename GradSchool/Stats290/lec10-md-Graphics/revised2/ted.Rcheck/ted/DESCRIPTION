@@ -1,0 +1,21 @@
+Package: ted
+Type: Package
+Title: What the Package Does Using Title Case
+Version: 1.0-1
+Date: 2020-01-26
+Authors@R: c(person(given = "Ted", family = "Cat",
+                    email = "ted@somewhere.com",
+		    role = c("aut", "cre")))
+Description: More details about what the package does. See
+        [Description File](http://cran.r-project.org/doc/manuals/r-release/R-exts.html#The-DESCRIPTION-file)
+        for details on how to write this part.
+License: GPL (>= 2)
+Roxygen: list(markdown = TRUE)
+Encoding: UTF-8
+RoxygenNote: 7.0.2
+Imports: ggplot2
+NeedsCompilation: no
+Packaged: 2020-01-29 18:10:57 UTC; naras
+Author: Ted Cat [aut, cre]
+Maintainer: Ted Cat <ted@somewhere.com>
+Built: R 3.6.2; ; 2020-01-29 18:11:03 UTC; unix

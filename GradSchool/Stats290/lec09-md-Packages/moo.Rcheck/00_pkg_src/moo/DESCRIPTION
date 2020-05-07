@@ -1,0 +1,13 @@
+Package: moo
+Type: Package
+Title: What the Package Does Using Title Case
+Version: 1.0
+Date: 2020-01-31
+Author: Moo, The cow who believes he's a dog!
+Maintainer: Moo, The cow who believes he's a dog! <moo@somewhere.com>
+Description: More details about what the package does. See
+           <http://cran.r-project.org/doc/manuals/r-release/R-exts.html#The-DESCRIPTION-file> for details
+           on how to write this part.
+License: GPL (>= 2)
+NeedsCompilation: no
+Packaged: 2020-02-01 03:17:15 UTC; colbyhawker

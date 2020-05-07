@@ -1,0 +1,367 @@
+---
+title: "28.1. Parallel Random Number Generation"
+output:
+      slidy_presentation
+---
+
+In R, the random number generator gets seeded, on demand, using the
+clock time and a process id. The state of the random number generator
+is saved in a structure `.Random.seed`. In a fresh R session, this
+structure is not to be found.
+
+```{r}
+exists(".Random.seed")
+```
+
+Upon invoking any R function that uses the random number generator,
+the structure gets created.
+
+```{r}
+rn <- rnorm(1)
+str(.Random.seed)
+```
+
+___
+
+When using parallel or cluster computing, a worker process can get the
+same random number state simply because a workspace containing
+`.Random.seed` was restored or the same random number generator was
+used before the process forked.
+
+```{r}
+runif(1)
+save.image("session.RData")
+runif(1) ## Note this value
+load("session.RData")
+runif(1) ## Should be same as the last one
+```
+
+___
+
+In other cases, each worker process may get its own seed, depending on
+ the situation.
+ 
+This means you have a very good chance of not being able to reproduce
+any of your results/errors.
+
+Therefore, when we use random numbers in your parallel computations,
+the following are desiderata.
+
+1. We would like to ensure reproducibility. Otherwise, we'll never be
+able to debug odd results or programs
+
+2. We want to ensure that the worker nodes/processes to use
+independent random sequence streams with _large periods and good
+theoretical properties_. 
+
+Setting a seed in each worker in a reproducible way will work, but the
+random number streams generated this way may get into step because
+although, the seeds may be different, but the generator is the
+same. Not all generators were designed explicitly not to get into
+step.
+
+3. Since coming up with different seeds for each process can become a
+chore, we would also like to initialize them with a small number of
+seeds. Like one number (`2893` for example), preferably in a master
+process and then have a standard way of working with the random number
+streams in the worker processes.
+
+4. You would like to jump ahead in streams. This is for efficiency as
+   well as debugging: it means that you can easily jump to problematic
+   simulations.
+
+5. Finally, you would like the entire computation to be reproducible.
+
+___
+
+The `parallel` package contains an implementation of the ideas of
+L’Ecuyer et al. (2002).
+
+- It uses a single RNG and make streams with seeds $2^{127}$ steps
+apart in the random number stream (which has period approximately
+$2^{191}$). This generator is that it has a fairly long period with a
+small seed (6 integers), and unlike R’s default "Mersenne-Twister"
+RNG, it is simple to advance the seed by a fixed number of steps.
+
+## 25.3.1. Examples
+
+Since the key issues have to do with the random number generation and
+therefore, we will take work with simple examples involving uniform
+random number generation. (All random variables rely on a uniform
+random number generator!)
+
+Typically, you would set the seed for the random number generator and
+generate some sequence of random variables.
+
+___
+
+Let us begin with a simple R session. 
+
+```{r}
+set.seed(123)
+seqRNG <- runif(15)
+print(seqRNG)
+```
+
+Now in a parallel environment, let us try the same thing. We generate 3
+sets of 5 after resetting the seed.
+
+```{r}
+library(parallel)
+cl <- makeCluster(3)
+set.seed(123)
+rngs <- clusterApply(cl, 1:3, function(x) runif(5))
+print(rngs)
+```
+
+___
+
+Ok, we got different results back from each worker, but at least do we
+get the same result back from all nodes if we repeat the process?
+
+```{r}
+set.seed(123)
+rngs <- clusterApply(cl, 1:3, function(x) runif(5))
+print(rngs)
+```
+
+No! That is because, we the above code reset the seed only on the
+master and that had no effect on the workers which are running
+independent R processes. 
+
+___
+
+So we fix that by setting the seed on all workers.
+
+```{r}
+clusterEvalQ(cl, set.seed(123))
+rngs <- clusterApply(cl, 1:3, function(x) runif(5))
+## Produces same sequence on all of them
+print(rngs)
+clusterEvalQ(cl, set.seed(123))
+rngs <- clusterApply(cl, 1:3, function(x) runif(5))
+## Produces same sequence on all of them
+print(rngs)
+stopCluster(cl)
+```
+
+Ok, that did it; we have reproducibility but that is useless if you
+are doing simulations: all workers are doing the same thing because
+they are all using the same stream of random numbers.
+
+___
+
+The same also happens with the unified approach we discussed using
+`foreach` and `%dopar%`. For completeness, here it is.
+
+```{r}
+library(foreach)
+library(doParallel)
+cl <- makeCluster(3)
+registerDoParallel(cl)
+set.seed(123)
+res <- foreach(i = 1:3) %dopar% { runif(5) }
+```
+
+```{r}
+set.seed(123)
+res2 <- foreach(i = 1:3) %dopar% { runif(5) }
+identical(res, res2)
+print(res)
+stopCluster(cl)
+```
+
+```{r}
+library(doParallel)
+cl <- makeCluster(3)
+registerDoParallel(cl)
+
+set.seed(123)
+res <- foreach(i = 1:3) %dopar% { runif(5) }
+
+set.seed(123)
+res2 <- foreach(i = 1:3) %dopar% { runif(5) }
+identical(res, res2)
+```
+
+___
+
+Again, as before we got non-identical results, which can be fixed by
+setting seeds in the worker nodes, but we again get useless (repeated)
+simulation results.
+
+```{r}
+clusterEvalQ(cl, set.seed(123))
+res <- foreach(i = 1:3) %dopar% { runif(5) }
+clusterEvalQ(cl, set.seed(123))
+res2 <- foreach(i = 1:3) %dopar% { runif(5) }
+identical(res, res2)
+stopCluster(cl)
+```
+
+
+## 28.1.2. Setting the default RNG kind
+
+We need to understand how random number generation in R works. By
+default, R uses the Mersenne-Twister generator.  This is documented in
+the help page for `set.seed`. Let us take a look at the help for
+`set.seed`.
+
+Note that `set.seed` is the recommended way of seeding random number
+generators in R. Also note that the variable `.Random.seed` in the
+global environment stores the _state_ of the random number generator.
+
+When a brand new R session is started, there is no variable
+`.Random.seed`. 
+
+Once you make a call to any of the random number generation functions,
+R looks for `.Random.seed` and if it does not find it, generates
+one. This is done by a call to `set.seed` using some combination of
+time and date and other system parameters. Since this is not something
+you can control, the only way to guarantee reproducibility is by
+seeding the generators yourself.
+
+___
+
+What is the default generator R provides?
+
+```{r}
+RNGkind()
+```
+
+For parallel computations, we want to use L`Ecuyer's Combined Multiple
+Recursive Generator (CMRG) which provides facilities for multiple
+streams because of desiderata 1. This generator is defined by the
+following recursion:
+
+$$
+  x_n = 1403580 \times x_{n-2} - 810728 \times x_{n-3} \mod{(2^{32} -
+  209)}
+  $$
+
+$$
+y_n = 527612 \times y_{n-1} - 1370589 \times y_{n-3} \mod{(2^{32} -
+22853)}
+$$
+
+$$
+z_n = (x_n - y_n) \mod{4294967087}
+$$
+
+$$
+u_n = z_n/4294967088 \mbox{ unless $z_n = 0$}
+$$
+
+This recursion has to be seeded with a 6-vector:
+
+$$
+(x_{n-3}, x_{n-2}, x_{n-1}, y_{n-3}, y_{n-2}, y_{n-1}).
+$$
+
+___
+
+The recursion for each of $x_n$ and $y_n$ can have pre-computed
+coefficients for $k$ steps ahead.  For $k = 2^{127}$, the seed is
+advanced by $k$ steps by
+
+```{r, eval = FALSE}
+.Random.seed <- nextRNGStream(.Random.seed)
+```
+
+Furthermore, sub-streams can be chosen starting from seeds $2^{76}$
+steps apart using `nextRNGSubStream()` which advances to the next
+substream.
+
+So, we set the default generator to be L'Ecuyer's CMRG on all workers.
+
+```{r}
+cl <- makeCluster(3)
+clusterSetRNGStream(cl, 12345)
+str(clusterApply(cl, 1:3, function(x) list(rngKind = RNGkind(), state = .Random.seed)))
+```
+
+___
+
+The function `clusterSetRNGStream` selects the L'Ecuyer's CMRG and
+distributes streams to the members of a cluster. It takes _one_ seed as an
+argument (`12345`).
+
+We can now get some random draws.  
+
+
+```{r}
+crngs <- clusterApply(cl, 1:3, function(x) runif(5))
+print(crngs)
+```
+
+___
+
+Now, if we set the stream again, we should get the same result as above.
+
+```{r}
+clusterSetRNGStream(cl, 12345)
+clusterApply(cl, 1:3, function(x) RNGkind())
+crngs2 <- clusterApply(cl, 1:3, function(x) runif(5))
+## Should be same results as before
+print(crngs2)
+
+identical(crngs, crngs2)
+
+stopCluster(cl)
+```
+
+## 28.1.3. The package `doRNG`
+
+The `doRNG` package does the above in a principled way. You use it as
+follows.
+
+```{r}
+library(doRNG)
+cl <- makeCluster(3)
+registerDoParallel(cl)
+
+set.seed(123)
+res <- foreach(i = 1:3) %dorng% { runif(5) }
+set.seed(123)
+res2 <- foreach(i = 1:3) %dorng% { runif(5) }
+identical(res, res2)
+stopCluster(cl)
+```
+
+___
+
+How does `doRNG` work?
+
+For a loop with N iterations, the `%dorng%` operator internally performs
+the following tasks:
+
+1. Generate a sequence of random seeds $(S_i)_{1 \leq i \leq N}$ for
+   the R random number generator L'Ecuyer-CMRG using the function
+   `nextRNGStream` from the `parallel` package, which ensure the
+   different RNG streams are statistically independent
+
+2. Modify the loop's R expression so that the random number generator
+   is set to L'Ecuyer-CMRG at the beginning of each iteration, and
+   is seeded with consecutive seeds in $(S_n)$: iteration $i$ is seeded
+   with $S_i$, $1 \leq i \leq N$
+
+3. Call the standard `%dopar%` operator, which in turn calls the
+   relevant (i.e. registered) `foreach` parallel backend
+
+4. Store the whole sequence of random seeds as an attribute in the
+   result object.
+
+The last step is important because you now have a way of getting those
+seeds and reproducing even parts of the results later if necessary by
+resetting the seeds.
+
+```{r}
+attr(res, "rng")
+```
+
+
+## 28.1.4. Session Info
+
+```{r}
+sessionInfo()
+```

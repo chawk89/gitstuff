@@ -1,0 +1,365 @@
+---
+title: "27.5. Running Batch Jobs on Clusters"
+output: slidy_presentation
+---
+
+## 27.5.1. Introduction
+
+When one runs cluster jobs, it is easy to lose track of the various
+settings used for job runs. This markdown document provides a job
+generation mechanism that serves two purposes:
+
+1. Generate job scripts for easy deployment on cluster
+2. Document the entire process so that the markdown can completely
+   reproduce the job generation process
+
+___
+
+Many others have solutions addressing the first purpose, but to my
+knowledge no one addresses the second which I actually consider more
+important for reproducibility and documentation.
+
+One edits a copy of this markdown as the steps below show and the
+markdown itself serves as a complete documentation of the created job
+runs. This example is written for R, the same ideas have been applied
+to other languages including Matlab.
+
+If you load this document in __Rstudio__ and specify just your `sunet`
+id below, you can then knit this document to create a job (directory)
+called `multiply` that can be run directly on `sherlock2` with no
+modifications. But do please read on.
+
+
+## 27.5.2. The problem
+
+As a concrete example, let us assume a cluster environment similar to
+[Stanford sherlock](https://sherlock.stanford.edu). It is a simple
+matter to modify it for other settings.
+
+We have script that we wish to execute on $n$ sherlock nodes, using
+parameters $p_i$ for $1\leq i\ldots, n$. ($p_i$ can be vectors.)
+
+For simplicity assume that on each node, you wish to compute the
+product of two parameters $p_1$ and $p_2$:
+
+```{r, eval = FALSE}
+result <- p[1] * p[2]
+```
+
+## 27.5.3. The steps
+
+Here are the steps that can automate the process, provided you follow
+some conventions.
+
+0. Specify your sunet ID and (optional) job queue.
+
+```{r}
+my_sunet <- "naras"
+job_queue <- "" 
+```
+The `job_queue` is for people who have bought sherlock nodes; if you
+are unsure just leave it as empty. Folks in the Statistics Department
+can get some priority by using `stat` as shown above on `sherlock`,
+but not `sherlock2`. Others may use their PI's sunet id, if they have
+been granted such privileges.
+
+___
+
+1. List your set of parameters in the chunk below. We will use the
+   three below. We use a header and a row for each node.
+
+```{r params, eval = FALSE}
+p1, p2
+ 5,  4
+ 3,  9
+ 2,  6
+```
+
+See _Tips_ below on automating this as well.
+
+___
+
+2. Write your R script for processing the parameters using the
+template below. Edit _only_ the problem dependent parts of the chunk
+below and your contents will automatically used in the job generation.
+
+```{r script_template, eval = FALSE}
+#!/usr/bin/env Rscript
+
+## Start of problem independent section
+args <- commandArgs(trailingOnly = TRUE)
+paramFile <- args[1]
+paramRowIndex <- as.integer(args[2])
+params <- read.csv(paramFile, header = TRUE, stringsAsFactors = FALSE)
+p <- params[paramRowIndex, ]
+## End of problem independent section
+
+## Start of problem dependent section
+p1 <- p[, 1] ## parameter 1
+p2 <- p[, 2] ## parameter 2
+
+result <- p1 * p2
+print(sprintf("Finished %.2f * %.2f", p1, p2))
+
+## Save variables you need for post-mortem analysis
+## Make sure to use <jobname> as shown
+saveRDS(result, file = sprintf("<jobname>-%d.RDS", paramRowIndex))
+
+## End of problem dependent section
+```
+
+___
+
+3. Use the _job_ template below.  Edit it suitably.
+   _Note that `sherlock` and `sherlock2` differ in
+   what modules are available._
+   
+   Here is an explanation of the items.
+
+- `time` indicates maximum job time (hours:minutes:seconds). Too
+little means your job will get killed. Too much means that your job
+will wait long to be queued and even be subject to aging of priority.
+
+- `mem` indicates your job's memory footprint in megabytes. Once
+again, if you exceed it, your job will be killed. Overestimate is ok,
+but too much will delay job execution.
+
+- `workdir` indicates where your data and scripts will all reside. All
+  paths, unless absolute in your script, will be relative to this
+  directory.
+
+- On the login node (i.e. the one you get with `ssh
+  sunet@sherlock.stanford.edu` or `ssh
+  sunet@login.sherlock.stanford.edu`) you won't even be able to use R
+  without `module load R/3.3.0` (`module load R/3.4.0` on `sherlock2`
+  as of this writing).
+
+- Add whatever modules you need to use. The command `module avail`
+  lists all available modules.
+
+- the `mail-type=ALL` will send email (sporadically) about your job
+  being queued, run and finishing. I find this useful as it is easy to
+  delete. Later you can delete that line if you wish.
+
+- Errors will go in files with extension `.err` (empty if no error) and
+  console output will go in `.out` files.
+
+___
+
+```{bash job_template, eval = FALSE}
+#!/bin/bash
+
+#SBATCH --mail-type=ALL
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --time=00:05:00
+#SBATCH --mem=1024
+#SBATCH --job-name=<jobname>-<job_index>
+#SBATCH --output=<jobname>-<job_index>.out
+#SBATCH --error=<jobname>-<job_index>.err
+#SBATCH --workdir=<homedir>/<jobname>
+
+#now run normal batch commands
+module load R/3.4.0
+
+## No user serviceable part below
+
+./<jobname>.R <param_file> <row_index>
+```
+
+___
+
+The next chunk merely creates an R variables with the contents of the
+script template and the job template, so do not modify.
+
+```{r}
+## Do not modify this chunk
+params_csv<- readLines(con = textConnection('
+<<params>>
+'))
+
+script_template <- readLines(con = textConnection('
+<<script_template>>
+'))
+job_template <- readLines(con = textConnection('
+<<job_template>>
+'))
+
+## An empty line gets included in the chunk reuse, so remove it
+params_csv <- params_csv[-1]
+script_template <- script_template[-1]
+job_template <- job_template[-1]
+if (nchar(job_queue) > 0) {
+    n <- length(job_template)
+    job_template <- c(job_template[1:3],
+                      paste("#SBATCH -p", job_queue),
+                      job_template[4:n])
+}
+```
+___
+
+4. Use the following R function to generate your job scripts. Note
+   that the home directory paths on `sherlock` and `sherlock2`
+   differ. So if you plan to use `sherlock2`, be sure to indicate that
+   by invoking this function with `sherlock2 = TRUE` as an argument.
+   
+   There should be no real need to modify this function, unless you
+   know what you are doing.
+
+```{r}
+generateJob <- function(sunet, jobname, submit_file = "run-me.sh",
+                        params = params_csv,
+                        param_file = "params.csv",
+                        script_contents = script_template,
+                        job_contents = job_template,
+                        sherlock2 = FALSE) {
+
+    ## Script to generate job submissions provided you follow some conventions
+
+    if (dir.exists(paths = jobname)) {
+        stop(sprintf("Sorry, directory %s already exists; won't overwrite!", jobname))
+    }
+    dir.create(path = jobname)
+
+    ## Copy the parameter file
+    writeLines(params_csv, con = file.path(jobname, param_file))
+
+    ## Write the processed R file
+    rCode <- gsub("<jobname>", jobname, script_template)
+    rFileName <- file.path(jobname, paste0(jobname, ".R"))
+    writeLines(text = rCode, con = rFileName)
+    Sys.chmod(rFileName, mode = "0755")
+
+    ## Write the script for each run
+    params <- read.csv(textConnection(params), header = TRUE, stringsAsFactors = FALSE)
+    N <- nrow(params)
+    template <- gsub("<param_file>", param_file, job_template)
+    submitLines <- character(N)
+    for (i in seq_len(N)) {
+        jobLines <- gsub("<jobname>", jobname, template)
+        jobLines <- gsub("<row_index>", i, jobLines)
+        jobLines <- gsub("<job_index>", sprintf("%03d", i), jobLines)        
+        jobLines <- gsub("<sunet>", sunet, jobLines)
+        if (sherlock2) {
+            jobLines <- gsub("<homedir>", paste0("/home/users/", sunet), jobLines)
+        } else {
+            jobLines <- gsub("<homedir>", paste0("/home/", sunet), jobLines)
+        }
+            
+        scriptName <- sprintf("script-%d.sh", i)
+        writeLines(text = jobLines, con = file.path(jobname, scriptName))
+        submitLines[i] <- paste("sbatch", scriptName)
+    }
+
+    ## Write the final job submission script
+    submitFilepath <- file.path(jobname, submit_file)
+    writeLines(c("#!/bin/bash",
+                 submitLines),
+               con = submitFilepath)
+    Sys.chmod(submitFilepath, mode = "0755")
+}
+```
+
+___
+
+5. Example invocation for `sherlock` and `sherlock2` (default) are
+   below. Ensure you have selected the appropriate modules in your job
+   template and then choose exactly one to use by changing `eval =
+   TRUE` for one of them and `eval = FALSE` for the other.
+   
+   For `sherlock` use:
+
+```{r, eval = FALSE}
+generateJob(sunet = my_sunet,
+            jobname = "multiply")
+```
+
+	For `sherlock2`, use: 
+
+```{r, eval = TRUE}
+generateJob(sunet = my_sunet,
+            jobname = "multiply",
+            sherlock2 = TRUE)
+```
+
+This should result in a folder named `multiply`, with a file called
+`run-me.sh`.
+
+___
+
+6. Copy the entire directory over to your _home_ directory on
+`sherlock` or `sherlock2` as the case may be. At the moment, it does
+not matter if you use either one.
+
+```{bash, eval = FALSE}
+scp -r multiply sherlock.stanford.edu:
+```
+
+Good practice would also suggest copying this edited markdown and
+rendered HTML to the same directory so things are all in one place!
+
+___
+
+7. Log into `sherlock` and do:
+
+```{bash, eval = FALSE}
+cd multiply
+./run-me.sh
+```
+
+___
+
+8. Check your mail for job notifications.  When done, copy the entire
+directory back and process results. Note how the saved workspace
+image files include the parameter row used.
+
+
+## 27.5.4. Tips
+
+1. Always edit on your laptop, and then upload to server. It is tempting
+to make small changes on server, but that only leads to confusion.
+
+___
+
+2. Make it easy to transfer your files back and forth. Use
+[kerberos](https://uit.stanford.edu/software) and configure your
+(client) `~/.ssh/config` file to allow kerberos login by adding a host
+section
+```
+Host sherlock sherlock.stanford.edu
+	GSSAPIAuthentication yes
+	GSSAPIDelegateCredentials yes
+```
+This makes it easy to adhere to the first rule.
+
+___
+
+3. Install any packages you need into your local R tree.
+
+___
+
+4. At some point, even the parameters for your job may be
+   programmatically generated. In the interest of reproducibility, you
+   can insert a chunk before the invocation of `generateJob` (step 5
+   above) to create the parameters and produce CSV content to feed to
+   `generateJob` via the argument `params`. The value should be the
+   contents of the CSV file as a vector of strings.  Be sure to format
+   it correctly or you'll get errors.
+
+___
+
+5. Most of the time, one only needs to change the Rscript template. In
+   fact, a simple modification can make it possible to run different
+   programs on different parameters: _just include the program file
+   or a call to the program generator as a parameter!_
+
+You can also look at my [Github
+Repo](https://github.com/bnaras/sherlock_cluster) for the actual scripts.
+
+
+## 27.5.6. Session Info
+
+```{r}
+sessionInfo()
+```
+

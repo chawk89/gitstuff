@@ -1,0 +1,475 @@
+---
+title: 24.2. Rcpp C/C++ Interface
+output:
+     slidy_presentation
+---
+
+One way to improve performance is to go to a compiled language such as
+C/C++. 
+
+Of particular importance is the package Rcpp, which has over a 1500
+packages use it!
+
+As we noted earlier, most of the R base was written in C/Fortran. So
+we need to know how things work underneath the language. It helps to
+take a look at a simple C example.
+
+We will assume that you have set up things appropriately for the
+compilers etc. Otherwise, you will not be able to render this
+document!
+
+
+## 24.2.1. Enter Rcpp
+
+The package `Rcpp` is an important package for several reasons.
+
+- Makes it easy to write C/C++ code that integrates with R
+- It is now the most widely used language extension for R. Over 1500
+  packages rely on it!
+- Major projects like Bioconductor rely on it for speed and linkages
+  to libraries
+- Is stable and reliable, and is actively maintained. (Recent features
+  include templating like in C++ which really push everything into
+  headers making code development much cleaner.)
+
+It has its own [web page](http://www.rcpp.org/) with lots of links and
+examples. Chapter 25 of Wickham's [Advanced
+R](https://adv-r.hadley.nz) book has some material, but we'll take a
+look at a few easily understandable examples that show its power.
+
+## 24.2.2. Use Cases
+
+Many package developers link R code to C/C++ (indeed other languages
+too) for several reasons.
+
+1. Convenience.  Existing C/C++ libraries are well-established for
+   Linear Algebra, Differential Equation Solvers, Automatic
+   Differentiation etc. So to re-use the code, all that needs to be
+   done is link R to the C library. Examples include: `RcppArmadillo`
+   an interface to the `Armadillo` linear algebra library, `RcppGSL`
+   an interface to GNU scientific library, etc. (Take a look at the
+   reverse imports of `Rcpp` on CRAN.)
+   In other cases, there may be no other implementation but in a
+   language like C/C++ and so your only solution to make such a
+   library available in R is to link against that.
+
+2. Memory efficiency. You don't want the overhead of R structures for
+   numerical routines. A good example is the `Matrix` library that
+   provides sparse matrices for use in R as `S4` classes, basically
+   storing  `i`, `j`, `value` (the row index, column index and value)
+   for non-zero entries and a small amount of additional information
+   for dimensions etc.
+
+3. Algorithmic efficiency. Code in other compiled languages can run
+   much, much faster. So for workhorse routines you would like to
+   exploit that. In fact, R itself uses system BLAS routines for basic
+   linear algebra.
+
+## 24.2.3. `Rcpp` lets you write C functions in R
+
+Suppose you have some C code that you want to call from R. In `Rcpp`
+you can directly include it as a string argument to the function
+`cppFunction` thus:
+
+```{r}
+library(Rcpp)
+cppFunction('
+  int add(int x, int y, int z) {
+    int sum = x + y + z;
+    return sum;
+  }'
+)
+```
+
+You can then use it like you would any R function.
+
+For example:
+```{r}
+add # like a regular R function, printing displays info about the function
+add(1, 2, 3)
+```
+
+___
+
+You can examine all the various steps of what `cppFunction` does.
+
+```{r, results='markup'}
+cppFunction('
+  int add(int x, int y, int z) {
+    int sum = x + y + z;
+    return sum;
+  }',
+  showOutput=TRUE, rebuild=TRUE)
+```
+
+So behind the scenes, `Rcpp` did the following.
+
+1. It writes out the C code in the string to a temporary file.
+2. It compiles the code in the temporary file
+3. It links it against the R libraries as well as the `Rcpp` libraries
+4. Then it loads the function into your R session so that it becomes
+available to you in your R session like any other R function.
+
+## 24.2.4. The convolution example using Rcpp
+
+Suppose we want the convolution of two numeric vectors `x` (length
+$m$) and `y` (length $n$) defined a vector length $m + n - 1$ as:
+
+$$
+z_k = \sum_{i = 1}^mx_{i}y_{k - i + 1},
+$$
+where the sum is over all values of $i$ that lead to legal subscripts
+for $x_i$ and $y_{k - i + 1}.$
+
+This is actually hard to do efficiently in interpreted R code, so let
+us see how we can do this in C and make R use it.
+
+
+```{r}
+cppFunction('
+  NumericVector rcppConv(NumericVector xa, NumericVector xb) {
+    int na = xa.size();
+    int nb = xb.size();
+    NumericVector xab(na + nb - 1);
+
+    for (int i = 0; i < na; i++)
+      for (int j = 0; j < nb; j++)
+        xab[i + j] += xa[i] * xb[j];
+
+    return xab;
+  }'
+)
+```
+
+Then use as
+
+```{r}
+x <- rnorm(3); y <- rnorm(4)
+rcppConv(x, y)
+```
+
+Note the use of specific type `NumericVector` for an R vector, that
+is, the equivalent of `numeric()` in R (not `list()`, which has a
+separate type `List`!)
+
+Thus, `Rcpp` makes using C code from R much simpler. 
+
+There is an Rcpp Cheatsheet (google it) that will provide a quick
+synposis.
+
+To actually see the gain in performance, let us compare an R
+implementation with the C implementation.
+
+```{r}
+rConv <- function(xa, xb) {
+    na  <- length(xa)
+    nb  <- length(xb)
+    xab <- numeric(na + nb - 1)
+    for (i in seq_len(na)) {
+        for (j in seq_len(nb)) {
+            xab[i + j]  <- xa[i] * xb[j]
+        }
+    }
+}
+library(microbenchmark)
+x  <- rnorm(100); y  <- rnorm(300);
+knitr::kable(
+           summary(
+               microbenchmark(
+                   rcpp = rcppConv(x, y),
+                   pureR = rConv(x, y),
+                   times = 1000
+               )))
+```
+
+
+
+## 24.2.5. Source files
+
+Except for toy examples, it is not possible to stick in C code as a
+string into R source files. Besides, you lose all the benefits an IDE
+for C/C++ for example.
+
+Therefore, you put the same code in source files and use it as shown
+below.
+
+```{Rcpp, eval = FALSE}
+#include <Rcpp.h>
+using namespace Rcpp;
+
+// [[Rcpp::export]]
+NumericVector rcppConv2(NumericVector xa, NumericVector xb) {
+  int na = xa.size();
+  int nb = xb.size();
+  NumericVector xab(na + nb - 1);
+
+  for (int i = 0; i < na; i++)
+    for (int j = 0; j < nb; j++)
+      xab[i + j] += xa[i] * xb[j];
+
+  return xab;
+}
+```
+
+The file has to include the `Rcpp` header files and use the `Rcpp`
+namespace. Furthermore, there is an `Rcpp` directive `[[Rcpp:export]]`
+that is required for the function to exported so that it becomes
+visible in R.
+
+Suppose you save the above in a file `rcppConv2.cpp`. Then use it as:
+
+```{r}
+sourceCpp("./rcppConv2.cpp")
+rcppConv2(x, y)
+```
+
+## 24.2.6. Data Structures and calling R functions
+
+`Rcpp` provides access to R lists, data frame, functions just as
+easily. You have to refer to the `Rcpp` web page for documentation on
+these. 
+
+We will see if we can call the R function `lm` from with C/C++!
+
+First, we run the usual `lm`.
+
+```{r}
+d <- data.frame(weight = c(4.17,5.58,5.18,6.11,4.50,4.61,5.17,4.53,5.33,5.14,
+                  4.81,4.17,4.41,3.59,5.87,3.83,6.03,4.89,4.32,4.69),
+                group = gl(2, 10, 20, labels = c("Ctl","Trt")))
+lm(weight ~ group, data = d)
+```
+
+Now, consider the following C code that
+
+1. Takes as arguments, a data frame, a formula, and an R function
+2. Returns the results of the R function applied to the data and
+formula.
+
+The object returned is an R object and therefore the return type is
+`RObject` and the parameters are of types `DataFrame`, `Formula` and
+`Function`, all `Rcpp` types for the respective objects in R.
+
+```{Rcpp, eval = FALSE}
+#include <Rcpp.h>
+using namespace Rcpp;
+
+// [[Rcpp::export]]
+RObject doF(DataFrame d, Formula formula, Function f) {
+  return(f(formula, d));
+}
+```
+
+Suppose we put the above in a file `doF.cpp`.
+
+___
+
+Let's feed `lm` as the function.
+
+```{r}
+sourceCpp("./doF.cpp")
+d <- data.frame(weight = c(4.17,5.58,5.18,6.11,4.50,4.61,5.17,4.53,5.33,5.14,
+                  4.81,4.17,4.41,3.59,5.87,3.83,6.03,4.89,4.32,4.69),
+                group = gl(2, 10, 20, labels = c("Ctl","Trt")))
+lm.D9 <- doF(d, weight ~ group, lm)
+summary(lm.D9)
+```
+
+Just so that it is completely clear:
+
+- we called an `Rcpp` function `doF` with some arguments
+- that function `doF` called R _back_ to execute the `lm` function
+  which was the argument `f`
+
+However, note that if the function `f` takes additional variable
+arguments (such as `...`) things become complicated. Some new features
+of `Rcpp11` have made this possible. (`Rcpp11` as a project has been
+dormant for some time now, though!)
+
+
+## 24.2.7 Using Rcpp in packages
+
+The `devtools`/`usethis` packages provide a hook to use `Rcpp`. Simply
+use: `use_rcpp` and it will add the necessary lines to the
+`DESCRIPTION` file.
+
+Note that packages using `Rcpp` need to have a `LinkingTo` field in
+the `DESCRIPTION` file, which `devtools::use_rcpp` automatically
+adds. 
+
+In an R package, any C/C++ code files should go under the `src`
+directory, as you saw in assignment 2.
+
+## 24.2.8 An Example C++ class
+
+Consider exposing a C++ uniform random number generator class to R. We
+will create a package `RcppUniform` that does this. 
+
+```{Rcpp, eval = FALSE}
+#include <Rcpp.h>
+
+using namespace Rcpp;
+
+class Uniform {
+public:
+  Uniform(double min_, double max_) : min(min_), max(max_) {}
+  NumericVector draw(int n) const {
+    RNGScope scope;
+    return runif( n, min, max );
+  }
+  double min, max;
+};
+```
+
+The above C++ class, which will be stored in the file
+`inst/include/RcppUniform.h`, where the file name without the
+extension corresponds to the package name. 
+
+The reason for this file going in `inst/include` is because the same
+class may need to be imported by R when installing the package. 
+
+## 24.2.9. Expose Class to R
+
+Next, we write some code to use the class and expose it to R, via
+`Rcpp`. This will be in the file `src/RcppUniform.cpp`.
+
+
+```{Rcpp, eval = FALSE}
+#include <Rcpp.h>
+
+using namespace Rcpp;
+
+// [[Rcpp::export]]
+XPtr<Uniform> Unew(SEXP min, SEXP max) {
+    // convert inputs to appropriate C++ types
+    double min_ = as<double>(min), max_ = as<double>(max);
+
+    // create a pointer to an Uniform object and wrap it
+    // as an external pointer
+    XPtr<Uniform> ptr( new Uniform( min_, max_ ), true );
+
+    // return the external pointer to the R side
+    return ptr;
+}
+
+// [[Rcpp::export]]
+NumericVector Udraw( SEXP xp, SEXP n) {
+    // grab the object as a XPtr (smart pointer) to Uniform
+    XPtr<Uniform> ptr(xp);
+
+    // convert the parameter to int
+    int n_ = as<int>(n);
+
+    // invoke the function
+    NumericVector res = ptr->draw( n_ );
+
+    // return the result to R
+    return res;
+}
+```
+
+The `Xptr<Uniform>` is a way to include an _external pointer_ to the
+C++ class instance, which is created in C++ code!
+
+## 24.2.10. Use `devtools` to indicate use of `Rcpp`
+
+```{r, eval = FALSE}
+usethis::use_rcpp(pkg = "RcppUniform")
+```
+
+## 24.2.11. Write an `R6` class to mirror the C++ class
+
+Import the `R6` package.
+
+```{r, eval = FALSE}
+usethis::use_package(package = "R6", pkg = "RcppUniform")
+```
+
+Next, create a simple wrapper.
+
+```{r, eval = FALSE}
+Uniform <- R6::R6Class("Uniform",
+                       private = list(
+                           ## Pointer to the C++ class
+                           xptr = NULL
+                       ),
+                       public = list(
+                           ## Constructor
+                           initialize = function(min = 0.0, max = 1.0) {
+                               private$xptr <- Unew(min, max)
+                           },
+                           ## Draw n observations from uniform
+                           draw = function(n = 1) {
+                               Udraw(private$xptr, n)
+                           }
+                       ))
+```
+
+## 24.2.12. Generate R Wrapper or Document
+
+You can explicitly generate the R wrapper code as follows. 
+
+```{r, eval = FALSE}
+library(Rcpp)
+Rcpp::compileAttributes(pkgdir = "RcppUniform", verbose = TRUE)
+```
+
+or if you just use `devtools::document` it should do this for you.
+
+```{r, eval = FALSE}
+devtools::document()
+```
+and install as usual.
+
+## 24.2.13.  Install and use
+
+We install the package and use it. 
+
+```{r}
+install.packages("RcppUniform_0.1.tar.gz", type = "source")
+```
+
+Use the `R6` class as you would any other.
+
+```{r}
+library(RcppUniform)
+u <- Uniform$new()
+u$draw(3)
+u2 <- Uniform$new(1.0, 5.0)
+u2$draw(5)
+```
+
+Note that the package honors the R seeds as well.
+
+```{r}
+set.seed(123)
+u <- Uniform$new()
+u$draw(3)
+u2 <- Uniform$new(1.0, 5.0)
+u2$draw(5)
+```
+
+Later, to see if we can reproduce results.
+
+```{r}
+set.seed(123)
+u <- Uniform$new()
+u$draw(3)
+u2 <- Uniform$new(1.0, 5.0)
+u2$draw(5)
+```
+
+
+## 24.2.14. Further Reading
+
+Rcpp has a very active mailing list and a huge amount of resources and
+examples.  There is also an `Rcpp` cheatsheet. Google it.
+
+Also see [Rstudio Rcpp
+Resources](https://support.rstudio.com/hc/en-us/articles/200486088-Using-Rcpp-with-RStudio). 
+
+## 24.2.15. Session Info
+
+```{r}
+sessionInfo()
+```

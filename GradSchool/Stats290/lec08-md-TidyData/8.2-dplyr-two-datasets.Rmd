@@ -1,0 +1,210 @@
+---
+title: "8.2. Working Across Two Datasets"
+output:
+     slidy_presentation
+---
+
+```{r, echo = FALSE, message = FALSE}
+library(tidyverse)
+```
+
+## 8.2.1. Bay Area Bike Share Data
+
+Recall that the data contains:
+
+1. The Station Information (file `201508_station_data.csv`)
+2. The Trip data (file `201508_trip_data.csv`)
+3. The Weather data (file `201508_weather_data.csv`)
+
+Earlier, we saw how to load this data using the `readr` package, but
+here we load saved versions here.
+
+```{r}
+stationData <- readRDS("stationData.RDS")
+tripData <- readRDS("tripData.RDS")
+```
+
+```{r}
+glimpse(stationData)
+```
+
+```{r}
+glimpse(tripData)
+```
+
+Clearly, these data are related and in a database framework, they
+would be separate tables in a database schema with foreign key
+relationships. 
+
+- `stationData` contains the master list of all stations with an `id`
+  for each station
+- Every trip contains a `StartStation` and an `EndStation` and these
+  better be one of those ids in the `stationData` table. 
+  
+In other words, `StartStation` and `EndStation` reference a _foreign
+key_ in `stationData`. 
+
+## 8.2.2.  Several Datasets
+
+Data analysis often uses more than one data set. For example, suppose
+we want to construct a table of rides per day for each city.
+
+This requires one to combine data that is in two data sets: `tripData`
+and `stationData`. 
+
+The package `dplyr` provides a set of two-table verbs that can be used
+to work with two tables at a time.
+
+* Mutating joins, which add new variables to one table from matching rows in 
+  another.
+* Filtering joins, which filter observations from one table based on whether or 
+  not they match an observation in the other table.
+* Set operations, which combine the observations in the data sets as if they 
+  were set elements.
+
+All two-table verbs work similarly. The first two arguments are `x`
+and `y`, and provide the tables to combine. The output is always a new
+table with the same type as `x`.
+
+Much of what follows is from the `dplyr` vignette on two-table verbs. 
+
+## 8.2.3. Mutating joins
+
+In what follows, remember that `df1` takes the place
+of `x` and `df2` takes the place of `y`. 
+
+Four types.
+
+
+```{r}
+(df1 <- tibble(x = c(1, 2), y = 2:1))
+(df2 <- tibble(x = c(1, 3), a = 10, b = "a"))
+```
+
+  * `inner_join(x, y)` only includes observations that match in both `x` and `y`.
+    
+```{r}
+    df1 %>% inner_join(df2)
+```
+    
+  * `left_join(x, y)` includes all observations in `x`, regardless of whether
+    they match or not. This is the most commonly used join because it ensures 
+    that you don't lose observations from your primary table.
+  
+```{r}
+    df1 %>% left_join(df2)
+```
+  
+  * `right_join(x, y)` includes all observations in `y`. It's equivalent to 
+    `left_join(y, x)`, but the columns will be ordered differently.
+  
+```{r}
+    df1 %>% right_join(df2)
+    df2 %>% left_join(df1)
+```
+
+* `full_join()` includes all observations from `x` and `y`.
+
+```{r}
+    df1 %>% full_join(df2)
+```
+
+Notice how missing values are introduced when no matches are found in
+the last three. 
+
+___
+
+### Average number of rides per day for each city
+
+We can now construct a table of the average number of rides per day
+for each city. (We assume a ride took place in the city where it
+started.)
+
+```{r}
+tripData %>%
+    dplyr::left_join(stationData, by = c("StartTerminal" = "station_id")) %>%
+    dplyr::select(StartDate, City = landmark) %>%
+    dplyr::mutate(Date = base::as.Date(StartDate)) %>%
+    dplyr::group_by(City, Date) %>%
+    dplyr::summarize(count = n()) %>%
+    dplyr::summarize(avg_no_of_rides = mean(count))
+```
+
+The `by` argument controls which variables are used in the
+matching. By default, the matching names are used. (In the above case,
+the two datasets had different names for the columns we wanted to use
+in the match and so we specified the variables to be used in the
+match: `StartTerminal` in `tripData` and `station_id` in
+`stationData`.)
+
+___
+
+These joins are called _mutating_ because they add new variables. But
+they can also add observations! If a match is not unique, a join will
+add all possible combinations (the Cartesian product) of the matching
+observations:
+
+```{r}
+(df1 <- tibble(x = c(1, 1, 2), y = 1:3))
+(df2 <- tibble(x = c(1, 1, 2), z = c("a", "b", "a")))
+df1 %>% left_join(df2)
+```
+
+## 8.2.4. Filtering joins
+
+Filtering joins match obserations in the same way as mutating joins,
+but affect the observations, not the variables. There are two types:
+
+* `semi_join(x, y)` __keeps__ all observations in `x` that have a match in `y`.
+* `anti_join(x, y)` __drops__ all observations in `x` that have a match in `y`.
+
+These are most useful for diagnosing join mismatches. For example,
+there are many flights in the `nycflights13` dataset that don't have a
+matching tail number in the planes table:
+
+```{r}
+library("nycflights13")
+flights %>% 
+  anti_join(planes, by = "tailnum") %>% 
+  count(tailnum, sort = TRUE)
+```
+___
+
+If you're worried about what observations your joins will match, start
+with a `semi_join()` or `anti_join()`. `semi_join()` and `anti_join()`
+never duplicate; they only ever remove observations.
+
+```{r}
+df1 <- tibble(x = c(1, 1, 3, 4), y = 1:4)
+df2 <- tibble(x = c(1, 1, 2), z = c("a", "b", "a"))
+
+# Four rows to start with:
+df1 %>% nrow()
+# And we get four rows after the join
+df1 %>% inner_join(df2, by = "x") %>% nrow()
+# But only two rows actually match
+df1 %>% semi_join(df2, by = "x") %>% nrow()
+```
+
+## 8.2.5. Set operations
+
+The final type of two-table verb is set operations. These expect the
+`x` and `y` inputs to have the same variables, and treat the
+observations like sets:
+
+* `intersect(x, y)`: return only observations in both `x` and `y`
+* `union(x, y)`: return unique observations in `x` and `y`
+* `setdiff(x, y)`: return observations in `x`, but not in `y`.
+
+## 8.2.6. Multiple-table verbs
+
+Iteratively combine using two-table verbs. 
+
+## 8.2.7. Resource
+
+- `dplyr` vignette on two-table verbs. 
+
+## 8.2.8. Session Info
+```{r}
+sessionInfo()
+```

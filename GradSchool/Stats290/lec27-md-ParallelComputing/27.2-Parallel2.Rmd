@@ -1,0 +1,396 @@
+---
+title: "27.2 Parallel Computing Examples"
+output:
+      slidy_presentation
+---
+
+## 27.2.1. $K$-means clustering
+
+We will use a $K$-means clustering example from Parallel R (O'Reilly
+book) (online via Stanford libraries).
+
+The function `kmeans` in the `stats` package does $K$-means
+clustering. Clustering is an unsupervised machine learning technique
+based on a notion of similarity.  See
+[Wikipedia](https://en.wikipedia.org/wiki/K-means_clustering), for
+example.
+
+___
+
+Here is a brief introduction.
+
+Suppose you have a dataset set of $n$ observations with $p$ features.
+
+Suppose we wish to group them into $K$ clusters or groups so that the
+observations within a group are somewhat homogeneous.  Assume that you
+have a notion of similarity or distance between observations, for
+example, Euclidean distance. 
+
+$K$-means clustering is a type of unsupervised learning, where you
+construct $K$ clusters ($C_i$, $i=1,\ldots ,K$) by minimizing the
+within-cluster sum of squares (homogeneity within groups). Associated
+with each cluster is a centroid, typically the group mean.  Formally,
+you minimize
+
+$$
+\sum_{i=1}^K \sum_{x \in C_i} ||x-\mu_i||^2
+$$
+where $\mu_i$ are the group means. 
+
+___
+
+### The Problem Setup
+
+__Input__ $n$ unlabelled samples with features $x_1, x_2, \ldots, x_n$
+    and an integer $K$ the number of clusters desired.
+
+__Output__ Provide class labels $1,2,\ldots,K$ for the $n$ samples
+    using a measure of similarity, for example some form of distance.
+
+Two samples are more similar if the distance between their feature
+vectors is small. (Other kernelized distances are more appropriate in
+some cases, but that is not important for us.)
+
+___
+
+Here is an algorithm that is commonly used.
+
+1. Initialize $K$ centers $\mu_1,\ldots , \mu_K$ by some method, see
+   below.
+2. Iterate:
+    - Label each observation as the cluster closes to it,
+    breaking ties randomly if necesssary:
+	$$
+C_l = \mbox{set of all observations } j \mbox{ such that } ||x_j-\mu_l||^2 \mbox{ is minimized.}
+    $$
+    - Recompute new cluster centers:
+      $$
+        \mu_l = \frac{1}{|C_l|} \sum_{i\in C_l} x_i
+	  $$
+    - Repeat until convergence; that is, no change to centers
+
+Initialization for centers: any $K$ randomly chosen samples or assign
+random clusters to each sample and compute centers.
+
+Note this is a heuristic algorithm for a computationally hard
+problem.
+
+___
+
+### Example
+
+Here we generate 4 clusters of the Boston dataset from the `MASS`
+package, using 100 random sets. First let us look at the sequential
+version where we do 4-means clustering.
+
+
+```{r}
+library(MASS)
+str(Boston)
+```
+
+Do a simple $K$-means clustering.
+
+```{r}
+set.seed(12345)
+system.time(result1 <- kmeans(x = Boston, centers = 4, nstart = 100))
+result1
+```
+
+So the four rows are the cluster centers.
+
+___
+
+Next we use an lapply version to generate three independent sets of
+clusters.
+
+```{r}
+set.seed(12345)
+system.time(result2 <- lapply(rep(100, 3),
+                              function(nstart) kmeans(x = Boston, centers = 4, nstart = nstart))
+            )
+```
+
+So `result2` is a list of three clusterings. 
+
+Among the three independent sets, we choose the one that gives the
+least sum of the _within-cluster_ sum of squares.
+
+```{r}
+tot.withinss <- sapply(result2, function(result) result$tot.withinss)
+result2 <- result2[[which.min(tot.withinss)]]
+result2
+```
+
+The function `which.min` (analogously, `which.max`) gives the index of
+a vector that yields the minimum (maximum) entry, ties broken arbitrarily.
+
+
+This is, of course, eminently parallelizable.
+
+___
+
+### Parallel Implementation
+
+```{r}
+library(parallel)
+cl <- makeCluster(3)
+ignore <- clusterEvalQ(cl, {library(MASS); NULL})
+system.time(results <- clusterApply(cl, c(33, 33, 34),
+                                    function(nstart) kmeans(Boston, 4,
+                                                            nstart = nstart)))
+
+stopCluster(cl)
+tot.withinss <- sapply(results, function(result) result$tot.withinss)
+result2 <- results[[which.min(tot.withinss)]]
+result2
+```
+
+
+Notice that in the `clusterEvalQ` call, we explicitly return `NULL`.
+Otherwise, in many other cases, the last value of the expression will
+be returned, which might be a large object (a big waste of
+bandwidth!).
+
+Also note that the cluster results are listed in a different
+order. You have no control over that.
+
+## 27.2.2. Bootstrapping
+
+Bootstrap samples are data samples of the same size as the original
+data, chosen with replacement.
+
+```{r}
+set.seed(12345)
+d <- data.frame(x = 1:5, y = letters[1:5])
+d
+```
+
+A boostrapped sample would be:
+
+```{r}
+boot.d <- d[sample(nrow(d), replace = TRUE), ]
+boot.d
+```
+
+R's bootstrapping package makes bootstrapping quite general.
+
+___
+
+### Defining the bootstrap function
+
+```{r}
+library(boot)
+```
+
+Examine the boot function:
+
+```{r, eval=FALSE}
+boot(data, statistic, R, sim = "ordinary", stype = c("i", "f", "w"),
+     strata = rep(1,n), L = NULL, m = 0, weights = NULL,
+     ran.gen = function(d, p) d, mle = NULL, simple = FALSE, ...,
+     parallel = c("no", "multicore", "snow"),
+     ncpus = getOption("boot.ncpus", 1L), cl = NULL) {
+  ...
+}
+```
+
+- The argument `data` is a vector, data frame, or matrix whose "rows"
+  are the observations.
+- The `statistic` is a function you write with at least two arguments
+  returning the statistic of interest to be bootstrap. The first
+  argument passed to this function is always the original dataset. The
+  second is a vector of indices which define the bootstrap sample. A
+  third argument is needed if predictions are required; it is a vector
+  of the random indices used to generate the bootstrap predictions.
+  Of course, other arguments can be passed through the `...` argument.
+
+___
+
+One way to understand how it all works is to simply print the vector
+of indices in a simple invocation.
+
+```{r}
+b <- boot(data = d,
+          statistic = function(d, i) {
+            print(i)
+            mean(d$x[i])
+          },
+          R = 10)
+b
+```
+
+___
+
+### Sequential and parallel version of the boot example in R
+
+In this example we show the use of boot in a prediction from
+regression based on the nuclear data.  This example is taken
+from Example 6.8 of Davison and Hinkley (1997). From the R help:
+
+> The 'nuclear' data frame has 32 rows and 11 columns.
+
+> The data relate to the construction of 32 light water reactor
+> (LWR) plants constructed in the U.S.A in the late 1960's and early
+> 1970's.  The data was collected with the aim of predicting the
+> cost of construction of further LWR plants.  6 of the power plants
+> had partial turnkey guarantees and it is possible that, for these
+> plants, some manufacturers' subsidies may be hidden in the quoted
+> capital costs.
+
+A prediction confidence interval is desired for plant 32.
+
+We first construct a dataset with the features we need. 
+
+```{r}
+library(tibble)
+library(boot)
+nuke <- nuclear[, c(1, 2, 5, 7, 8, 10, 11)]
+tibble::glimpse(nuke)
+```
+
+We're going to use a generalized linear model (regression) for the
+model fit.
+
+```{r}
+nuke.lm <- glm(log(cost) ~ date + log(cap) + ne + ct + log(cum.n) + pt, data = nuke)
+summary(nuke.lm)
+```
+
+___
+
+Take a moment to think what it means to bootstrap a model. Basically
+you are going to be resampling the residuals!  So we have to get a
+handle on the distribution of the residuals to sample from.
+
+```{r}
+nuke.diag <- glm.diag(nuke.lm)
+nuke.res <- nuke.diag$res * nuke.diag$sd
+nuke.res <- nuke.res - mean(nuke.res)
+```
+
+Now we can set up a new data frame with the data, the standardized
+residuals and the fitted values (named `fit`) for use in the
+bootstrap.
+
+```{r}
+nuke.data <- data.frame(nuke, resid = nuke.res, fit = fitted(nuke.lm))
+tibble::glimpse(nuke.data)
+```
+
+___
+
+We want a prediction of plant number 32 but at date 73.00 along with
+a prediction confidence interval.
+
+```{r}
+new.data <- data.frame(cost = 1, date = 73.00, cap = 886, ne = 0,
+                       ct = 0, cum.n = 11, pt = 1)
+tibble::glimpse(new.data)
+```
+
+```{r}
+new.fit <- predict(nuke.lm, new.data)
+new.fit
+```
+
+To get the confidence interval, we will bootstrap.
+
+___
+
+We are ready to write the bootstrap statistic function: `data` and
+`inds` will be appropriately constructed and passed by the boot
+function. For predictions a third argument `i.pred` will also be
+passed by `boot` as noted in the help page: it is the vector of random
+indices used to generate bootstrap predictions.
+
+```{r}
+nuke.fun <- function(dat, inds, i.pred, fit.pred, x.pred) {
+    ## Use the bootstrapped residuals to construct the new response
+    lm.b <- glm(fit + resid[inds] ~ date + log(cap) + ne + ct + log(cum.n) + pt,
+                data = dat)
+    pred.b <- predict(lm.b, x.pred)
+    
+    c(coef(lm.b), pred.b - (fit.pred + dat$resid[i.pred]))
+}
+```
+Note that we return a 8-vector, seven coefficients in the model
+(including intercept) plus the prediction error. 
+
+___
+
+Now we can do the bootstrap: `R` is the of bootstrap replicates and
+`m` number of predictions at each bootstrap replicate. Notice also
+that two extra arguments to 'statistic' are passed through boot via
+`nuke.fun`. So here is the sequential version.
+
+```{r}
+system.time(nuke.boot <- boot(nuke.data, nuke.fun, R = 999, m = 1,
+                  fit.pred = new.fit, x.pred = new.data))
+
+```
+
+___
+
+The `boot` function returns a whole bunch of things, including $t$
+statistics. 
+
+```{r}
+tibble::glimpse(nuke.boot)
+```
+
+We can look at the $t$ variable, which is the actual values computed
+by our `nuke.fun`.
+
+```{r}
+head(nuke.boot$t)
+```
+
+___
+
+The bootstrap prediction squared error would then be found by
+
+```{r}
+mean(nuke.boot$t[, 8]^2)
+```
+because our coefficient vector is of length 7 and the last one
+(eighth) is our prediction error.
+
+The basic bootstrap prediction limits would be
+
+```{r}
+new.fit - sort(nuke.boot$t[, 8])[c(975, 25)]
+```
+
+which reflect the .025 and the .975 percentile..
+
+___
+
+### Parallel version with multicore in parallel
+
+
+```{r}
+library(parallel)
+detectCores()
+```
+
+Contrast this with the examples for ``clusterCall``.
+
+```{r}
+mc <- getOption("mc.cores", 3)
+system.time(res <- mclapply(c(333,333,333),
+                            function(n) {
+                                boot(nuke.data, nuke.fun, R = n, m = 1,
+                                     fit.pred = new.fit, x.pred = new.data)
+                            }))
+
+
+mean(c(sapply(res, function(x) x$t[, 8]^2)))
+new.fit - sort(c(sapply(res, function(x) x$t[, 8])))[c(975, 25)]
+```
+
+## Session Info
+
+```{r}
+sessionInfo()
+```

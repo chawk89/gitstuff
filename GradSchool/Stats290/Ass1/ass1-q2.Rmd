@@ -1,0 +1,38 @@
+---
+title: 'Stat 290: Assignment 1: Q2'
+output:
+  html_document:
+    df_print: paged
+---
+
+## Q2 (Primitive functions) [4 pts]
+
+Write a function to list all the primitive functions in the
+`base` package. Then provide that list.
+
+```{r q_2_fndef, eval = TRUE}
+library(dplyr)
+listPrimitiveFunctionsInBase <- function() {
+    ## YOUR CODE HERE
+  base = mget(ls("package:base"), inherits = TRUE)
+  is.primitive(base)
+  prim = Filter(is.primitive,base)
+  prim
+
+}
+```
+
+Print the list by invoking the function.
+```{r q_2_fncall, eval = TRUE}
+## YOUR CODE HERE
+listPrimitiveFunctionsInBase()
+``` 
+
+
+## Session Info
+
+Leave everything below as is.
+
+```{r}
+sessionInfo()
+```

@@ -1,0 +1,474 @@
+---
+title: "25.2 The `reticulate` Python Interface"
+output:
+      slidy_presentation
+---
+
+The following material is adapted from the vignettes in the
+`reticulate` package.
+
+The `reticulate` package provides an R interface to Python modules,
+classes, and functions. For example, this code imports the Python `os`
+module and calls some functions within it:
+
+___
+
+If you have installed everything correctly, the following will work in
+an R markdown.
+
+```{r}
+library(reticulate)
+os <- import("os")
+os$listdir(".")
+```
+
+Functions and other data within Python modules and classes can be
+accessed via the `$` operator (analogous to the way you would interact
+with an R list, environment, or reference class).
+
+___
+
+Here is an example using pandas.
+
+```{r}
+pd  <- import("pandas")
+dates <- pd$date_range('20130101', periods=6)
+dates
+```
+
+Notice how the python `pd.date_range` is now `pd$date_range`!
+
+A pandas data frame.
+
+```{r}
+pdf <- pd$DataFrame(list(x = rnorm(6),
+                         date = dates,
+                         y = LETTERS[1:6]))
+pdf
+```
+
+Let us examine what `pdf` really is.
+
+```{r}
+class(pdf)
+str(pdf)
+```
+
+___
+
+The `import_main()` and `import_builtins()` functions give you access
+to the main module where code is executed by default and the
+collection of built in Python functions. For example:
+
+```{r}
+main <- import_main()
+
+builtins <- import_builtins()
+builtins$print('foo')
+```
+
+The main module is generally useful if you have executed Python code
+from a file or string and want to get access to its results (see the
+section below for more details).
+
+## Sourcing Scripts
+
+The `source_python()` function will source a Python script and make
+the objects it creates available within an R environment (by default
+the calling environment). For example, consider the following Python
+script:
+
+```{python, eval = FALSE}
+def add(x, y):
+  return x + y
+```
+
+We source it using the `source_python()` function and then can call
+the `add()` function directly from R:
+
+```{r}
+source_python('add.py')
+add(5, 10)
+```
+
+## Executing Code
+
+You can execute Python code within the main module using the
+`py_run_file` and `py_run_string` functions. You can then access any
+objects created using the `py` object exported by reticulate:
+
+```{r}
+py_run_file("fib.py")
+# access via the 'py' object
+py$fib(10)
+```
+
+```{r}
+py_run_string("x = 10")
+py$x
+```
+
+## Object Conversion
+
+By default when Python objects are returned to R they are converted to
+their equivalent R types. However, if you'd rather make conversion
+from Python to R explicit and deal in native Python objects by default
+you can pass `convert = FALSE` to the `import` function. In this case
+Python to R conversion will be disabled for the module returned from
+`import`. For example:
+
+```{r}
+# import numpy and specify no automatic Python to R conversion
+np <- import("numpy", convert = FALSE)
+
+# do some array manipulations with NumPy
+a <- np$array(c(1:4))
+sum <- a$cumsum()
+
+# convert to R explicitly at the end
+py_to_r(sum)
+```
+
+As illustrated above, if you need access to an R object at end of your
+computations you can call the `py_to_r()` function explicitly.  As you
+can expect, there is an `r_to_py` function that goes the other way. 
+
+```{r}
+r_to_py(1:10)
+r_to_py(as.list(1:10))
+r_to_py(matrix(1:12, nrow = 3))
+```
+
+More on matrices later. 
+
+## Getting Help
+
+You can print documentation on any Python object using the `py_help()` function. For example:
+
+```r
+os <- import("os")
+py_help(os$chdir)
+```
+
+## Lists, Tuples, and Dictionaries
+
+The automatic conversion of R types to Python types works well in most
+cases, but occasionally you will need to be more explicit on the R
+side to provide Python the type it expects.
+
+For example, if a Python API requires a list and you pass a single
+element R vector it will be converted to a Python scalar. To overcome
+this simply use the R `list` function explicitly:
+
+```r
+foo$bar(indexes = list(42L))
+```
+
+Similarly, a Python API might require a `tuple` rather than a list. In
+that case you can use the `tuple()` function:
+
+```r
+tuple("a", "b", "c")
+```
+
+Obviously, R named lists are converted to Python dictionaries as shown
+in the pandas example. However you can also explicitly create a Python
+dictionary using the `dict()` function:
+
+```r
+dict(foo = "bar", index = 42L)
+```
+
+This might be useful if you need to pass a dictionary that uses a more
+complex object (as opposed to a string) as its key.
+
+## Numeric Types and Indexes
+
+R and Python have different default numeric types. If you write `42`
+in R it is considered a floating point number whereas `42` in Python
+is considered an integer.
+
+This means that when a Python API expects an integer, you need to be
+sure to use the `L` suffix within R. For example, if the `foo`
+function requires an integer as its `index` argument you would do
+this:
+
+```r
+foo$bar(index = 42L)
+```
+
+Python collections are addressed using 0-based indices rather than the
+1-based indices you might be familiar with from R. So to address the
+first item of an array in R you would write:
+
+```r
+items[[1]]
+```
+
+Whereas if you are calling a method in Python via reticulate that
+takes an index you would write this to address the first item:
+
+```r
+items$get(0L)
+```
+
+Note the use of the 0-based index as well as the `L` to indicate t
+that the value is an integer.
+
+## Arrays
+
+R matrices and arrays are converted automatically to and from
+[NumPy](http://www.numpy.org/) arrays.
+
+When converting from R to NumPy, the NumPy array is mapped directly to
+the underlying memory of the R array (no copy is made). In this case,
+the NumPy array uses a column-based in memory layout that is
+compatible with R (i.e. Fortran style rather than C style). When
+converting from NumPy to R, R receives a column-ordered copy of the
+NumPy array.
+
+You can also manually convert R arrays to NumPy using the `np_array()`
+function. For example, you might do this if you needed to create a
+NumPy array with C rather than Fortran style in-memory layout (for
+higher performance in row-oriented computations) or if you wanted to
+control the data type of the NumPy array more explicitly. Here are
+some example uses of `np_array()`:
+
+```r
+a <- np_array(c(1:8), dtype = "float16")
+a <- np_array(c(1:8), order = "C")
+```
+
+Also, always remember that when calling NumPy methods array indices
+are 0 rather than 1 based and require the `L` suffix to indicate they
+are integers.
+
+## Arrays
+
+Dense data are stored contiguously in memory, addressed by a single index (the
+memory address). Array memory ordering schemes translate that single index into
+multiple indices corresponding to the array coordinates. For example, matrices
+have two indices: rows and columns. Three-d arrays have three, and so on.
+
+___
+
+### Column-major order
+
+*Column-major* order is used by Fortran, Matlab, R, and most underlying core
+linear algebra libraries (BLAS). Sequential address locations are translated
+into array coordinates *i, j, k, ...* so that the first array coordinates vary
+most rapidly with address, the next array coordinates less rapidly, and so on.
+For instance, four address locations 1, 2, 3, 4 are translated into a two by
+two matrix coordinate system *(i, j)* as:
+```
+address   i  j
+  1       1  1
+  2       2  1
+  3       1  2
+  4       2  2
+```
+The phrase *column-major* comes from the matrix example, where sequentially
+addressed data are laid out sequentially along columns of the matrix.
+
+The concept of "row" and "column" don't directly apply to n-d arrays, but the
+same idea holds. For instance the R language lays out sequential addresses from
+1, 2, ..., 8, into a 2x2x2 3-d array as:
+```
+address   i  j  k
+  1       1  1  1
+  2       2  1  1
+  3       1  2  1
+  4       2  2  1
+  5       1  1  2
+  6       2  1  2
+  7       1  2  2
+  8       2  2  2
+```
+Consider the 3-d case shown above. Given array dimensions *d<sub>1</sub>=2, d<sub>2</sub>=2, d<sub>3</sub>=2*,
+a formula that takes 1-based coordinates *i, j, k* and returns address location
+*a* is
+<br/>
+*a = i + (j - 1) &#42; d<sub>1</sub> + (k - 1) &#42; d<sub>2</sub> &#42; d<sub>1</sub>*.
+
+___
+
+### Row-major order
+
+Row-major ordering is a different translation between sequential address
+indices and array coordinates, instead laying sequential data in memory across
+rows in matrices. Row-major ordering is sometimes called "C" style ordering
+and column-major ordering "Fortran" style. Python/NumPy refers to the orderings
+in array flags as C_CONTIGUOUS and F_CONTIGUOUS, respectively.
+For instance
+address locations 1, 2, 3, 4 are translated into a 2x2 matrix coordinate
+system *(i, j)* as:
+```
+address   i  j
+  1       1  1
+  2       1  2
+  3       2  1
+  4       2  2
+```
+Efficient wrappers to BLAS routines exist for row-major ordered arrays.
+For completeness, here is a 2x2x2 3-d example layout:
+```
+address   i  j  k
+  1       1  1  1
+  2       1  1  2
+  3       1  2  1
+  4       1  2  2
+  5       2  1  1
+  6       2  1  2
+  7       2  2  1
+  8       2  2  2
+```
+And similarly to above a formula for this example that converts these 1-based
+array coordinates to address indices is:
+<br/>
+*a = k + (j - 1) &#42; d<sub>3</sub> + (i - 1) &#42; d<sub>3</sub> &#42; d<sub>2</sub>*.
+
+
+## Reticulate with care
+
+The reticulate package lets us easily mix R and Python code and data. Recall
+that R represents all dense arrays in column-major order but Python/NumPy can
+represent dense arrays much more generally. That difference warrants attention
+and can easily lead to confusion!
+
+Remember the following things when working with R and Python arrays, especially
+*n*-d arrays with *n &gt; 2*.
+
+1. Dense R arrays are presented to Python/NumPy as column-major NumPy arrays.
+2. *All* NumPy arrays (column-major, row-major, otherwise) are presented to R as column-major arrays, because that is the only kind of dense array that R understands.
+3. R and Python print arrays differently.
+
+Also worth knowing:
+
+- Python array indices are zero-based, R indices are 1-based.
+- R arrays are only copied to Python when they need to be, otherwise data are shared.
+- Python arrays are *always* copied when moved into R arrays. This can sometimes lead to three copies of any one array in memory at any one time (at the moment this was written). Future versions will reduce that copy overhead to two.
+
+More in the `reticulate` package vignette on arrays!
+
+## Data Frames
+
+R data frames can be automatically converted to and from
+[Pandas](https://pandas.pydata.org/) DataFrames. By default, columns
+are converted using the same rules governing R array <-> NumPy array
+conversion, but a couple extensions are provided:
+
+| R      | Python                                    |
+| ------ | ----------------------------------------- |
+| Factor | Categorical Variable                      |
+| POSIXt | NumPy array with dtype = `datetime64[ns]` |
+
+If the R data frame has row names, the generated Pandas DataFrame will
+be re-indexed using those row names (and vice versa). Special handling
+is also available for a `DatetimeIndex` associated with a Pandas
+DataFrame; however, because R only supports character vectors for row
+names they are converted to character first.
+
+## Sparse Matrices
+
+Sparse matrices created by [Matrix R
+package](https://CRAN.R-project.org/package=Matrix) can be converted
+[Scipy CSC
+matrix](https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.csc_matrix.html),
+and vice versa. This is often useful when you want to pass sparse
+matrices to Python functions that accepts Scipy CSC matrix to take
+advantage of this format, such as efficient column slicing and fast
+matrix vector products.
+
+For example, we first create a sparse matrix using
+`Matrix::sparseMatrix()`:
+
+```{r}
+library(Matrix)
+N <- 5
+dgc_matrix <- sparseMatrix(
+  i = sample(N, N),
+  j = sample(N, N),
+  x = runif(N),
+  dims = c(N, N))
+```
+
+The sparse matrix looks like this:
+
+```{r}
+dgc_matrix
+```
+
+Let's convert it to Scipy CSC matrix using `r_to_py()`:
+
+```{r}
+csc_matrix <- r_to_py(dgc_matrix)
+csc_matrix
+```
+
+Note that the right-hand side contains the non-zero entries of the
+matrix while the left-hand side represents their locations in the
+matrix.
+
+We can also use `py_to_r()` to convert the CSC matrix back to
+`Matrix::dgCMatrix` representation that can then be manipulated easily
+in R which is the same as the original sparse matrix that we created
+earlier using `Matrix::sparseMatrix()`:
+
+```{r}
+py_to_r(csc_matrix)
+```
+
+
+## Functions
+
+### Signatures
+
+By default R functions are converted to Python with a generic
+signature (`function(...)`), where there's neither keyword argument
+nor default values for arguments.
+
+For example, below we apply `r_to_py()` to an R function and then we
+use [inspect Python
+module](https://docs.python.org/3/library/inspect.html) to get the
+converted function's argument spec. You can see that the signature of
+the wrapped function looks different than the original R function's
+signature.
+
+```{r}
+inspect <- import("inspect")
+converted_func <- r_to_py(function(a, b = 1.5) {})
+inspect$getargspec(converted_func)
+```
+
+This default conversion typically works fine, however some Python
+libraries have strict checking on the function signatures of user
+provided callbacks. In these cases the generic `function(...)`
+signature will fail this checking.
+
+For these cases you can use `py_func()` to wrap the R function so that
+the wrapped function has exactly the same signature as that of the
+original R function, e.g. one argument `a` without default value and
+another argument `b` with default value 1.5.
+
+```{r}
+wrapped_func <- py_func(function(a, b = 1.5) {})
+inspect$getargspec(wrapped_func)
+```
+
+Note that the signature of the R function must not contain esoteric
+Python-incompatible constructs. For example, we cannot have R function
+with signature like `function(a = 1, b)` since Python function
+requires that arguments without default values appear before arguments
+with default values.
+
+
+## Session Info
+```{r}
+sessionInfo()
+```
+
+
+
+
+
+

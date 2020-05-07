@@ -1,0 +1,71 @@
+\nonstopmode{}
+\documentclass[a4paper]{book}
+\usepackage[times,inconsolata,hyper]{Rd}
+\usepackage{makeidx}
+\usepackage[utf8,latin1]{inputenc}
+% \usepackage{graphicx} % @USE GRAPHICX@
+\makeindex{}
+\begin{document}
+\chapter*{}
+\begin{center}
+{\textbf{\huge Package `moo'}}
+\par\bigskip{\large \today}
+\end{center}
+\begin{description}
+\raggedright{}
+\item[Type]\AsIs{Package}
+\item[Title]\AsIs{What the Package Does Using Title Case}
+\item[Version]\AsIs{1.0}
+\item[Date]\AsIs{2020-01-31}
+\item[Author]\AsIs{Moo, The cow who believes he's a dog!}
+\item[Maintainer]\AsIs{Moo, The cow who believes he's a dog! }\email{moo@somewhere.com}\AsIs{}
+\item[Description]\AsIs{More details about what the package does. See
+<http://cran.r-project.org/doc/manuals/r-release/R-exts.html\#The-DESCRIPTION-file> for details
+on how to write this part.}
+\item[License]\AsIs{GPL (>= 2)}
+\item[NeedsCompilation]\AsIs{no}
+\end{description}
+\Rdcontents{\R{} topics documented:}
+\inputencoding{utf8}
+\HeaderA{moo-package}{What the Package Does Using Title Case}{moo.Rdash.package}
+\aliasA{moo}{moo-package}{moo}
+\keyword{package}{moo-package}
+%
+\begin{Description}\relax
+More details about what the package does. See
+           <http://cran.r-project.org/doc/manuals/r-release/R-exts.html\#The-DESCRIPTION-file> for details
+           on how to write this part.
+\end{Description}
+%
+\begin{Section}{Package Content}
+
+Index of help topics:
+\begin{alltt}
+hello                   A simple function doing little
+moo-package             What the Package Does Using Title Case
+\end{alltt}
+\end{Section}
+%
+\begin{Section}{Maintainer}
+Moo, The cow who believes he's a dog! <moo@somewhere.com>
+\end{Section}
+%
+\begin{Author}\relax
+Moo, The cow who believes he's a dog!
+\end{Author}
+\inputencoding{utf8}
+\HeaderA{hello}{A simple function doing little}{hello}
+%
+\begin{Description}\relax
+This function shows a standard text on the console. In a time-honoured
+tradition, it defaults to displaying \emph{hello, world}.
+\end{Description}
+%
+\begin{Examples}
+\begin{ExampleCode}
+  hello()
+  hello("and goodbye")
+\end{ExampleCode}
+\end{Examples}
+\printindex{}
+\end{document}

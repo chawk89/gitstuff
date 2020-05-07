@@ -1,0 +1,129 @@
+---
+title: 23.6. Those Pesky Notes
+output:
+     slidy_presentation
+---
+
+Consider the package we created in Assignment 2. You had a plotting
+function `plotTzbyOS` using `ggplot2`.
+
+Recall the function definition.
+
+```{r, eval = FALSE}
+plotTzByOS <- function(data, color = c("blue", "#E69F00")) {
+    tzAndOs <- tibble(tz = unlist(lapply(data, function(x) x$tz)),
+                      agent = unlist(lapply(data, function(x) x$a))) %>%
+        mutate(tz = ifelse(tz == "", "Unknown", tz),
+               os = ifelse(grepl("Windows", agent), "Windows", "Nonwindows")) %>%
+        select(tz, os)
+    ... ## Stuff omitted for brevity
+}
+```
+
+___
+
+You might have also noticed that in the file `stat290.ass2.R` we had
+the following.
+
+```{r, eval = FALSE}
+utils::globalVariables(names = c("os",
+                                 "Nonwindows",
+                                 "Windows",
+                                 "value",
+                                 "agent",
+                                 "count",
+                                 "tz"))
+
+```
+
+Ordinarily, if you did not that incantation above---comment it out,
+for example---and you ran `R CMD check` on it, you would get
+complaints as shown below.
+
+```
+* checking dependencies in R code ... OK
+* checking S3 generic/method consistency ... OK
+* checking replacement functions ... OK
+* checking foreign function calls ... OK
+* checking R code for possible problems ... NOTE
+plotTzByOS: no visible binding for global variable ‘tz’
+plotTzByOS: no visible binding for global variable ‘agent’
+plotTzByOS: no visible binding for global variable ‘os’
+plotTzByOS: no visible binding for global variable ‘count’
+Undefined global functions or variables:
+  agent count os tz
+* checking Rd files ... OK
+* checking Rd metadata ... OK
+* checking Rd cross-references ... OK
+...
+* DONE
+Status: 1 NOTE
+```
+
+___
+
+Let's examine what that complaint is about.
+
+R is asking: 
+
+Dude, where are you getting the parameter `tz` and `agent` in the call
+to `mutate`? I see no variables named `tz` or `agent`. Are you sure
+that is not something you overlooked?  
+
+Similarly, `os` in the `select` call and others further down.
+
+___
+
+The root cause is that we are using `dplyr` constructs; packages
+like `dplyr`, `ggplot2` and `magrittr` do all kinds of non-standard
+and deferred evaluation. 
+
+In this example, `dplyr` knows to evaluate `tz` and `agent` in the
+context of the tibble constructed earlier in the pipeline. In other
+words, when the code is executed, those variables will be available
+and everything will work fine. (Well, at least we assume so!)
+
+But that is not possible for R to detect via a code analysis which is
+what it does during `R CMD check`. The reality is that there is no
+guarantee that the code will run correctly! For example, nothing stops
+a user from passing a data frame that has _no_ variable called
+`os`. In that case, the code will fail.
+
+To paraphrase Djikstra: _Running the code can only  detect presence of
+errors, not their absence_.
+
+___
+
+## 23.6.1. The solution
+
+The `R-exts` manual suggest you use the following construct in your
+package to avoid _known to be false_ `NOTE`s.  It is important not to
+abuse this. 
+
+```{r, eval = FALSE}
+utils::globalVariables(names = c("os",
+                                 "Nonwindows",
+                                 "Windows",
+                                 "value",
+                                 "agent",
+                                 "count",
+                                 "tz"))
+
+```
+
+Then everything works.  Note also that here I have included more
+variables than necessary (`Nonwindows`, `Windows`, `value`) and it is
+easy to make errors.
+
+It is important not to abuse this facility to make even legitimate
+`NOTE`s go away!
+
+___
+
+## Session Information
+```{r}
+sessionInfo()
+```
+
+
+

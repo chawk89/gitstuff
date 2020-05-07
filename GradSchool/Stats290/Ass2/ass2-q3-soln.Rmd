@@ -1,0 +1,125 @@
+---
+title: 'Stat 290: Assignment 2: Q3'
+output:
+  html_document:
+    df_print: paged
+---
+```{r, echo = FALSE, message=FALSE}
+library(tidyverse)
+```
+
+## Q3. Tidy data, `dplyr` manipulations and summaries [15 pts]
+
+__3.__ For this exercise, we will use the data from the [2018
+  Statistical Computing
+  Expo](http://community.amstat.org/stat-computing/data-expo/data-expo-2018).
+  The data is provided for you with the assignment in `expo2018.zip`,
+  so no need to download it.  In this exercise, we will try to answer
+  some of the questions posed in the `Description.txt` file. 
+
+__3a.__ Using `readr` functions, read the three datasets and name them
+`locations`, `forecast` and `histWeather` matching the file
+names. Names for `forecast` should be changed to pass the check
+below. _Hint:_ use `readr::read_csv` and `readr::read_table2` to read
+and `readr::problems` on read value to identify issues to fix.
+
+Use the following names for `forecast`:
+
+- `cityRow` for the city row
+- `fDate` for the forecasted date
+- `fValue` for the forecasted value
+- `fWhat` for the forecasted measure
+- `fWhen` for the date the forecast was made.
+
+
+```{r q_3a, eval = TRUE}
+##Your ANSWER HERE
+locations <- readr::read_csv("locations.csv")
+histWeather <- readr::read_csv("histWeather.csv")
+col_types <- list(cityRow = readr::col_integer(),
+                  fDate = readr::col_date(format = "%Y-%m-%d"),
+                  fValue = readr::col_integer(),
+                  fWhat = readr::col_character(),
+                  fWhen = readr::col_date(format = "%Y-%m-%d"))
+
+forecast <- readr::read_table2( "forecast.dat",
+                               col_names = names(col_types),
+                               col_types = do.call(readr::cols, col_types),
+                               progress = FALSE,
+                               na = "M")
+
+
+```
+
+__3b.__ Ensure `histWeather` is tidy. Mutate `forecast` by removing
+missing forecast values.
+
+```{r q_3b, eval = TRUE}
+##Your ANSWER HERE
+histWeather <- histWeather %>%
+    group_by(AirPtCd, Date) %>%
+    filter(row_number() == 1)
+
+forecast <- forecast %>%
+    filter(!is.na(fValue))
+
+```
+
+__3c.__ Create a dataset to answer the following question: what is
+the distribution of errors for maximum temperature in the forecast for
+each city? 
+
+For this part, all you do is create a dataset named `maxT` with the
+appropriate contents. It should have an integer variable named `lag`
+(_date when the forecast was made_ - _forecasted date_) as a measure
+of closeness of the forecast, and variable names `trueValue` for the
+value from `histWeather` for maximum temperature. Clean out missing
+values.
+
+```{r q_3c, eval = TRUE}
+##Your ANSWER HERE
+## Add column cityRow to locations
+locations <- locations %>%
+    mutate(cityRow = row_number())
+
+maxT <- forecast %>%
+    dplyr::filter(fWhat == "MaxTemp" & !is.na(fValue)) %>%
+    dplyr::mutate(lag = as.integer(fWhen - fDate)) %>%
+    left_join(locations, by = "cityRow") %>%
+    select(fDate, fValue, lag, cityRow, AirPtCd) %>%
+    left_join(histWeather, by = c("fDate" = "Date", "AirPtCd" = "AirPtCd")) %>%
+    select(cityRow, fDate, fValue, lag, trueValue = "Max_TemperatureF") %>%
+    filter(!is.na(trueValue))
+
+```
+
+__3d.__ How do the errors vary with the closeness of the forecast for
+	each city? For this part, summarize using mean of
+	$\sum_{i=1}^n(y_{f} - y_{h})^2$ as the error measure. (Here, $y_f$
+	and $y_h$ are the forecast and true historical value
+	respectively). Focus only on forecasts made 2 days before or
+	earlier. Your answer should be a grouped dataset named `errorT`
+	with columns `cityRow`, `lag` and `error` and group `cityRow`.
+
+
+```{r q_3d, eval = TRUE}
+##Your ANSWER HERE
+errorT <- maxT %>%
+    filter(lag < -1) %>%
+    group_by(cityRow, lag) %>%
+    summarize(error = mean((fValue - trueValue)^2))
+
+```
+
+__3e.__ For each city which lag produced the least error? Answer
+should be a dataset named `minErrorT` with `city`, `state`, and `lag`
+and `error` as variables.
+
+```{r q_3e, eval = TRUE}
+##Your ANSWER HERE
+minErrorT <- errorT %>%
+    slice(which.min(error)) %>%
+    left_join(locations, by = "cityRow") %>%
+    select(city, state, lag, error)
+
+```

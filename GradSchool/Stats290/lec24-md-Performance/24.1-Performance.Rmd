@@ -1,0 +1,230 @@
+---
+title: 24.1. Performance
+output:
+     slidy_presentation
+---
+
+R is an extremely dynamic language. We have discussed R's scoping
+rules earlier and seen how R looks up free variables dynamically. This
+is because the S language (on which R is based) was developed for
+exploratory analysis. 
+
+This also means that a completely undeclared variable will not
+necessarily cause an error in interactive scripts, for you might have
+a variable declared and saved in a session that might be loaded before
+running the script. (I would, however, say it does imply a degree of
+danger and should be generally avoided in preference to explicit
+saving and loading of variables.)
+
+## 24.1.1. Constants
+
+There is no real notion of a constant in the R language unless you
+hardwire it. That is you cannot define:
+
+```{r, eval = FALSE}
+TWO <- 2L
+```
+and assume it is going to be treated as a constant. Your code can
+actually modify `TWO` later and no questions will be asked.
+
+Of course, if you use `2L` wherever you used `TWO`, that would indeed
+be treated as a constant, but using a name for constant usually makes
+code more readable!
+
+## 24.1.2. Functions
+
+One can change any aspect of a function: argument, body, and even
+  environment. 
+  
+Which means that the details of a function object can only be detected
+at the actual execution time!
+
+Even looking up a variable inside a function is expensive, since one
+can never know where it will come from, the current environment, or
+its parent, etc. etc., or even cause an error.
+
+Therefore, function calls are expensive, involving setting up
+environments, promises, before actually executing the body. Lazy
+evaluation helps but only so much. 
+
+Which is why vectorization pays off in R programming: once the
+variable is located, all one has to do is sweep over its elements
+without the added overhead of a function call for each operation.
+
+## 24.1.3. Object Class
+
+One can change the class of objects at will _at runtime_. 
+
+One can also convert types and there is coercion as well. 
+
+This means techniques like _type inference_ cannot be exploited to
+create efficient code. 
+
+There are modern efforts underway to add annotations to object that
+can be used to assume determined behavior, but they are not yet fully
+fledged and under consideration. For example, one might specify that a
+function argument or object data is of a certain type, which can let
+the R byte compiler do some inference downstream.
+
+## 24.1.4. Generic Functions
+
+Generic functions dispatch based on type of object.  If a new class of
+object is added and a generic defined for it, that means another look
+up in a table for dispatch. 
+
+Since the table itself is dynamic, it is looked up at runtime. So,
+the cost can be significant.  
+
+Let us examine this via an example. 
+
+## 24.1.5 Timing Comparisons
+
+Let us see this in action using a slightly modified example on [Stack
+Overflow](https://stackoverflow.com/questions/16386154/is-s4-method-dispatch-slow)
+
+```{r}
+library(R6)
+
+## Bare function
+f <- function(x) NULL
+
+## S3 method
+s3 <- function(x) UseMethod("s3")
+s3.integer <- function(x) NULL
+
+## S4 class and method
+A <- setClass("A", representation(a = "list"))
+setGeneric("s4", function(x) standardGeneric("s4"))
+setMethod(s4, "A", function(x) NULL)
+
+## Reference class (R5) method
+B <- setRefClass("B")
+B$methods(r5 = function(x) NULL)
+
+## R6 method
+C <- R6Class("C",
+             public = list(r6 = function(x) NULL))
+
+## Create objects
+a <- A()
+b <- B$new()
+r6 <- C$new()
+
+library(microbenchmark)
+knitr::kable(
+           summary(
+               microbenchmark(
+                   bare = NULL,
+                   fun = f(),
+                   s3 = s3(1L),
+                   s4 = s4(a),
+                   r5 = b$r5(),
+                   r6 = r6$r6(),
+                   times = 1000
+               )))
+```
+
+## 24.1.6. Projects for Speeding up R
+
+There are several projects that are dedicated to improving R
+performance.
+
+___
+
+###  Pretty Quick R
+
+[Pretty Quick R](http://www.pqr-project.org/) by Radford Neal aims
+to speed up R. In particular, per the project statement:
+
+- Multiple processor cores can automatically be used to perform some
+  numerical computations in parallel with other numerical
+  computations, and with the thread performing interpretive
+  operations. No changes to R code are required to take advantage of
+  such computation in “helper threads”.
+
+- pqR makes a better attempt at avoiding unnecessary copying of
+  objects, by maintaining a real count of “name” references, that can
+  decrease when the object bound to a name changes. Further
+  improvements in this scheme are expected in future versions of pqR.
+
+- Some operations are avoided completely in pqR — for example, in pqR,
+the statement for (i in 1:10000000) ... does not actually create a
+vector of 10000000 integers, but simply sets i to each of these
+integers in turn.
+
+The problem is that this version is always behind the latest R
+version. Current pqR is based on R version 2.15.x.
+
+Several of these improvements have made into the usual R itself
+now. And recent releases of R use `altrep` (alternative internal
+representation of objects) which yield improvements in both size of
+objects and speed (representation of sequences, run length encoded
+vectors, sortedness, `NA`s present, etc.)
+
+As an example, consider the following:
+
+```{r, eval = FALSE}
+## Loop over an index 1 million times
+for (i in 1:1e6) {
+    ...
+}
+```
+Previous R would actually allocate a million-element vector, but now
+it just uses a sequence with a start and end and executes the loop.
+
+Similarly, if meta-data on whether `x` is sorted causes a clause like
+`x > 10` to return much faster.
+
+___
+
+### Renjin
+
+[Renjin](http://www.renjin.org) is a Java based interpreter for the R
+language.
+
+- Better support for big data with facilities to interact with data
+  stored in the cloud
+- Uses deferred computation and just-in-time compilation to achieve
+better performance
+
+Not all CRAN packages are certified to work with Renjin. So that is
+something to watch for.
+
+___
+
+### FastR
+
+FastR is an implementation of the R Language in Java atop Truffle, a
+framework for building self-optimizing AST interpreters.
+
+[FastR](https://github.com/graalvm/fastr) is an implementation of the
+R Language in Java atop Truffle, a framework for building
+self-optimizing AST interpreters.
+
+FastR is intended eventually to be a drop-in replacement for GNU
+R. Currently, however, the implementation is incomplete. Notable
+limitations are:
+
+- Graphics support is mostly missing, limited to output to the "pdf" device.
+
+- Many packages either do not install, particularly those containing
+  native (C/C++) code, or fail tests due to bugs and limitations in
+  FastR. In particular popular packages such as data.table and Rcpp
+  currently do not work with FastR.
+
+___
+
+### Academic Research
+
+There is also work afoot on where there are possibilities for
+improvement, particularly in the
+
+- [DSC](https://www.r-project.org/conferences.html)
+- [Radford Neal](http://www.cs.toronto.edu/~radford/)
+- [Jan Vitek](http://janvitek.org/)
+
+And companies such as Oracle and Microsoft also have their own teams
+working on R.
+
+Chapters 23 and 24 of [Advanced R](https://adv-r.hadley.nz) also have
+useful details on performance.

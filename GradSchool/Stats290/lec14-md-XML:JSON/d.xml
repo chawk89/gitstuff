@@ -1,0 +1,81 @@
+<?xml version="1.0"?>
+<!DOCTYPE StatDataML PUBLIC "StatDataML.dtd" "/usr/local/lib/R/3.6/site-library/StatDataML/dtd/StatDataML.dtd" >
+<StatDataML xmlns="http://www.omegahat.org/StatDataML/">
+<description>
+<title>d</title>
+<source>R</source>
+<date> Fri Feb  7 08:44:45 2020 </date>
+<version> </version>
+<comment> </comment>
+<creator>R-3.6.2:StatDataML_1.0-26</creator>
+</description>
+<dataset>
+<list>
+<dimension>
+<dim size="3"><e>x</e><e>y</e><e>z</e></dim>
+</dimension>
+<properties>
+<list>
+<dimension>
+<dim size="2"><e>row.names</e><e>class</e></dim>
+</dimension>
+<listdata>
+<array>
+<dimension>
+<dim size="2"></dim>
+</dimension>
+<type><numeric><integer>
+<min>1</min><max>2</max>
+</integer></numeric></type>
+<textdata sep=" &#x000A;&#x000D;">
+1 2
+</textdata>
+</array>
+<array>
+<dimension>
+<dim size="3"></dim>
+</dimension>
+<type> <character/> </type>
+<data>
+<e>tbl_df</e><e>tbl</e><e>data.frame</e>
+</data>
+</array>
+</listdata>
+</list>
+</properties>
+<listdata>
+<array>
+<dimension>
+<dim size="2"></dim>
+</dimension>
+<type> <character/> </type>
+<data>
+<e>A</e><e>B</e>
+</data>
+</array>
+<array>
+<dimension>
+<dim size="2"></dim>
+</dimension>
+<type><numeric><integer>
+<min>1</min><max>2</max>
+</integer></numeric></type>
+<textdata sep=" &#x000A;&#x000D;">
+1 2
+</textdata>
+</array>
+<array>
+<dimension>
+<dim size="2"></dim>
+</dimension>
+<type><numeric><real>
+<min>1</min><max>2</max>
+</real></numeric></type>
+<textdata sep=" &#x000A;&#x000D;">
+1 2
+</textdata>
+</array>
+</listdata>
+</list>
+</dataset>
+</StatDataML>

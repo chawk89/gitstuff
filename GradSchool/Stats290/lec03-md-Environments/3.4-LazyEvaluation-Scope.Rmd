@@ -1,0 +1,353 @@
+---
+title: "3.4. Lazy Evaluation and Lexical Scoping"
+output:
+     slidy_presentation
+---
+
+How is a function call actually executed? From the language
+definition:
+
+> The evaluator finds the function object being called, creates an
+> environment with the formal arguments of the function matched to
+> the actual arguments in the call, and evaluates the body of the
+> function in that environment.
+
+Lazy evaluation refers to the fact that _function arguments are not
+evaluated until needed_.
+
+> The objects in the environment of the call are not the evaluated
+> objects, but _promises_.  They contain the expression, it's
+> value (when done) and some flags.  The argument is evaluated when
+> it is  needed. The promise remains a promise after evaluation but
+> the evaluation is done only once.
+
+Lazy evaluation is implemented using _promises_.
+
+No way to see promises in R directly, but they enable things like
+`substitute()` for parsing and checking for missing arguments.
+(Note. There is an R package providing promises for asynchronous
+programming, and although somewhat related, that is not exactly the
+same.)
+
+## An exercise
+
+Consider:
+
+```{r}
+f <- function(x, y = x) {
+    y
+}
+g <- function(x, y = x) {
+  x <- 2 * x
+  y
+}
+```
+
+What will be returned for `f(10)` and `g(10)`?
+
+```{r, eval = FALSE}
+f(10)
+g(10)
+```
+
+__Answer__: For `f(10)`, you get the expected `10` since when `y` is
+evaluated, the value of `x` is looked up and assigned in the promise
+associated with `y`.
+
+For `g(10)`, the returned value is `20` because when `y` is lazily
+evaluated, the value of `x`, has changed to `20`! Recall thet `y` is
+implemented as a promise pointing to the value of `x` and when it is
+finally called upon, the value happens to be `20`.
+
+One way to control when things are evaluated is to use the function
+`force` which is defined simply as:
+
+```{r}
+force
+```
+
+So if we define `g2` as follows:
+
+```{r}
+g2 <- function(x, y = x) {
+    force(y)
+    x <- 2 * x
+    y
+}
+g2(10)
+```
+we see that we get the expected answer.
+
+## Scope
+
+Scope pertains to where values of a symbol will be looked up.  The
+actual look up happens when the function is run, according to certain
+rules: the scoping rules. These rules specify how symbols are
+evaluated by the evaluator. Let us examine this in the context of a
+function definition.
+
+```{r}
+f <- function(x, y = 2) {
+    w <- x^2 + y^2
+    x + y + z + w
+}
+```
+For a function, you have:
+
+- __formal arguments__. These are the symbols in the argument
+  list. When the function is invoked these have to be bound to some
+  value (a promise object, as we told you). So they are bound symbols.
+- We also have variables defined inside the function. These are
+  _local_ variables and they are bound to values that they are
+  assigned to.
+- The other variables that are just used inside the function. These
+  may or may not result in an error during evaluation if the variable
+  cannot be found. So these variables are neither local (since they
+  were not defined inside the function, i.e. not on the left hand side
+  of an assignment) nor bound inside the function. You may say they
+  are _free_.
+
+In the above `f`, the variables `x` and `y` are bound to arguments, `w` is local,
+and `z` is is unbound or free.
+
+Recall that a `frame` is a set of symbol-value pairs and is evaluated
+in some environment, the two together create a new environment which
+is the function's environment.
+
+When a function is called a new evaluation frame is created. The
+function's enclosing environment is the environment active at the time
+the function was created. This is made available to the function.
+
+### Function call walkthrough
+
+Let us see what happens as we call `f(1)`.
+
+```{r, error = TRUE}
+f(1)
+```
+
+- `x` gets bound to 1, `y` is bound to 2
+- `w` is computed as `1^2 + 2^2` = `5`.
+- Now to compute `x + y + z + w`, a value needs to be found for `z`.
+So the search for `z` begins
+- `z` is searched for in the environment of `f` which is
+```{r}
+environment(f)
+```
+the global environment.
+- Since there is no `z` in the global environment, the error is
+raised.
+```{r}
+ls(environment(f))  ## No z here?
+```
+
+So now let us make a `z`.
+```{r}
+z <- 2
+f(1)
+```
+That works as `z` is now found.
+
+A few more examples.
+
+```{r, error = TRUE}
+f <- function() {
+  y
+}
+rm("y") ## Ensure we don't have y in workspace
+f()  ## error since y not found
+y <- 1
+f()  ## ok, y is found a level up.
+```
+
+Now define `y` inside.
+
+```{r}
+f <- function() {
+  y <- "y from inside"
+  y
+}
+f()
+y <- 1
+f()  ## still same result
+```
+
+Return a function.
+
+```{r, error = TRUE}
+f <- function(x, y=2) {
+    w <- x^2 + y^2
+    x + y + z + w
+}
+rm(z)
+f(1) ## fails
+z <- 10
+f(1) ## 1 + 2 + 10 + 5
+rm(z)
+f(1) ## fails again (dynamic behavior!)
+```
+
+I point this out because I know people have been surprised by this
+behavior, particularly when you save your R workspace and load it
+back.  Depending on what is in your workspace before you load back,
+your results could be different.,
+
+Now, this does not mean saving your R session workspace is a bad
+idea. With large datasets, you often want to save the processing time.
+
+The better thing to do is to save objects, rather than the entire
+workspace. Note also, if your saved objects only make sense in the
+context of a loaded package, unless that package is loaded again, you
+could have very different behaviors.
+
+It is vital for an R developer to code (functions) with careful
+attention to scoping rules so that there are no harsh surprises.
+
+
+### Another function call walkthrough
+
+Consider:
+
+```{r}
+f2 <- function() {
+  z <- 10
+  g <- function(x, y = 2) {
+      w <- x^2 + y^2
+      x + y + z + w
+  }
+  g
+}
+```
+
+Let us examine what is in each environment.
+
+```{r}
+ls(environment(f2))
+```
+
+```{r}
+gFn <- f2()
+environment(gFn)
+parent.env(environment(gFn))
+ls(environment(gFn))
+```
+
+Note that:
+- environment of `gFn` is _not_ the global environment!
+- the parent environment of `gFn` is in fact the global environment,
+which is the environment of `f2`.
+- `z` is _available in the environment of `gFn`, with value `10`,
+`gFn(2)` will use that value.
+
+```{r}
+gFn(2)
+```
+
+We also have a `z` in the global environment, but that has no effect:
+the scoping rules mean that the `z` in the environment of `gFn` will
+be found and so there is no need to look it up in the global
+environment, which is one level up!
+
+_This behavior is often exploited preserve state in conjunction with
+another assignment operator `<<-`. In fact, it is used in reference
+based OOP classes in R.
+
+## Other functions
+
+Sometimes, it helps to have syntatic sugar.
+
+One can perform set operations via infix operators. For example, here
+are functions based on already existing functions: the functions
+`union`, `setdiff`, etc. are already in R.
+
+```{r}
+`%+%` <- union
+`%-%` <- setdiff
+`%=%` <- setequal
+`%*%` <- intersect
+`%in%` <- is.element
+```
+
+We can then apply them in an infix fashion.
+
+```{r}
+A <- c("Cat", "Dog", "Parakeet")
+B <- c("Dog", "Parakeet")
+A %*% B  ## intersection
+A %-% B  ## set difference
+"Cat" %in% B  ## membership
+```
+
+Lest you get too excited about this and use it immoderately, beware
+that you mask already defined operations. For example, `%*%` is used
+for matrix multiplication.  But you can access the original definition:
+
+```{r}
+get("%*%", envir=baseenv())  ## so you can still use it
+```
+
+So such syntactic sugar should be used wisely.
+
+>
+> Syntactic sugar causes cancer of the semicolon
+>           --- Alan Perlis, Epigrams of Programming
+>
+
+However, such sugar can be really useful if used judiciously.
+
+### Replacement functions
+
+Suppose you want to set the last element of a vector to some
+value. One way is to use subset indexing.
+
+```{r}
+x <- 1:3
+x[3] <- 10
+x
+```
+We know that this is actually happening via functions, specifically
+the `[` function.
+
+```{r}
+get('[')
+```
+So suppose you try to write your own function.
+
+```{r}
+setLast <- function(x, value) {
+    x[length(x)] <- value
+    invisible(x)
+}
+```
+
+Let us try it.
+
+```{r}
+x
+setLast(x, 100)
+x
+```
+
+Nothing changed! Why?
+
+For example, here is a function to replace the last element of a
+vector.
+
+```{r}
+`setLast<-` <- function(x, value) {
+    if (!is.vector(x)) stop("setLast: Expecting a vector")
+    x[[length(x)]] <- value
+    x
+}
+
+x <- list(1, 2, 3)
+setLast(x) <- list(4, 5, 6)
+x
+```
+
+The above is equivalent to `x <- ``setLast<-``(x, list(4, 5, 6))`
+
+## Session Info
+```{r}
+sessionInfo()
+```

@@ -1,0 +1,443 @@
+{
+  "meta": {
+    "disclaimer": "Do not rely on openFDA to make decisions regarding medical care. While we make every effort to ensure that data is accurate, you should assume all results are unvalidated. We may limit or otherwise restrict your access to the API in line with our Terms of Service.",
+    "terms": "https://open.fda.gov/terms/",
+    "license": "https://open.fda.gov/license/",
+    "last_updated": "2019-12-14",
+    "results": {
+      "skip": 0,
+      "limit": 3,
+      "total": 11171211
+    }
+  },
+  "results": [
+    {
+      "receiptdateformat": "102",
+      "receiver": null,
+      "companynumb": "HQWYE821915MAR04",
+      "receivedateformat": "102",
+      "primarysource": null,
+      "seriousnessother": "1",
+      "transmissiondateformat": "102",
+      "fulfillexpeditecriteria": "1",
+      "safetyreportid": "4322505-4",
+      "sender": {
+        "senderorganization": "FDA-Public Use"
+      },
+      "receivedate": "20040319",
+      "patient": {
+        "patientonsetage": "56",
+        "reaction": [
+          {
+            "reactionmeddrapt": "ARTHRALGIA"
+          },
+          {
+            "reactionmeddrapt": "OEDEMA PERIPHERAL"
+          },
+          {
+            "reactionmeddrapt": "PURPURA"
+          }
+        ],
+        "patientonsetageunit": "801",
+        "patientsex": "1",
+        "drug": [
+          {
+            "drugstartdateformat": "102",
+            "drugindication": "PYELONEPHRITIS",
+            "drugadministrationroute": "048",
+            "drugtreatmentduration": "4",
+            "drugcharacterization": "1",
+            "drugstartdate": "20031227",
+            "drugenddateformat": "102",
+            "drugtreatmentdurationunit": "804",
+            "drugdosagetext": "ORAL",
+            "drugauthorizationnumb": "50621",
+            "drugenddate": "20031230",
+            "medicinalproduct": "OROKEN (CEFIXIME, UNSPEC)"
+          },
+          {
+            "drugcharacterization": "2",
+            "medicinalproduct": "PYOSTACINE (PRISTINAMYCIN)"
+          },
+          {
+            "drugcharacterization": "2",
+            "medicinalproduct": "ROCEPHIN"
+          },
+          {
+            "drugcharacterization": "2",
+            "openfda": {
+              "product_ndc": [
+                "55111-160",
+                "55111-161",
+                "60505-0560",
+                "0404-7189",
+                "55111-162",
+                "64980-515",
+                "75834-120",
+                "11980-779",
+                "69238-1616",
+                "50383-025",
+                "50383-024",
+                "13985-602",
+                "75834-112",
+                "60505-0363",
+                "68047-713",
+                "59390-140",
+                "75834-119",
+                "75834-201",
+                "75834-200",
+                "24208-410",
+                "71209-098",
+                "71209-099",
+                "24208-434",
+                "75834-199",
+                "17478-713",
+                "71209-097"
+              ],
+              "package_ndc": [
+                "13985-602-05",
+                "55111-161-50",
+                "64980-515-01",
+                "17478-713-11",
+                "17478-713-10",
+                "55111-160-79",
+                "50383-025-05",
+                "55111-161-78",
+                "55111-161-79",
+                "55111-160-30",
+                "71209-097-05",
+                "71209-098-02",
+                "59390-140-05",
+                "75834-119-50",
+                "71209-097-02",
+                "55111-160-78",
+                "50383-024-10",
+                "75834-120-05",
+                "24208-410-10",
+                "75834-120-01",
+                "75834-200-05",
+                "0404-7189-01",
+                "75834-112-01",
+                "75834-199-05",
+                "55111-162-50",
+                "75834-201-50",
+                "75834-112-05",
+                "68047-713-01",
+                "55111-161-01",
+                "55111-161-05",
+                "55111-162-78",
+                "55111-162-30",
+                "24208-434-05",
+                "55111-162-01",
+                "75834-201-05",
+                "55111-160-01",
+                "55111-162-05",
+                "13985-602-10",
+                "50383-025-10",
+                "75834-119-05",
+                "75834-119-01",
+                "50383-024-05",
+                "71209-099-05",
+                "71209-098-10",
+                "71209-099-02",
+                "11980-779-05",
+                "55111-160-50",
+                "60505-0363-2",
+                "75834-200-01",
+                "71209-097-10",
+                "60505-0363-1",
+                "64980-515-05",
+                "75834-200-50",
+                "75834-201-01",
+                "24208-434-10",
+                "24208-410-05",
+                "60505-0560-1",
+                "60505-0560-0",
+                "75834-120-50",
+                "69238-1616-6",
+                "75834-199-01",
+                "75834-112-50",
+                "75834-199-50",
+                "55111-162-79",
+                "55111-160-05",
+                "55111-161-30",
+                "71209-099-10",
+                "71209-098-05"
+              ],
+              "generic_name": [
+                "OFLOXACIN OTIC",
+                "OFLOXACIN",
+                "OFLOXAXIN"
+              ],
+              "spl_set_id": [
+                "ef145ece-56d8-4dea-a136-ec462b335641",
+                "8db221b1-32f3-f6ca-e404-71f56a860d08",
+                "1d19a6db-6da5-e7de-f929-2d18bdfa2cf5",
+                "6a3dcc79-bde4-4c32-8a0e-ea14a1e1a191",
+                "7aab4449-3dda-4e2c-8e40-b3244a548bf5",
+                "2ec6bd57-96df-47ac-b218-1469801868b7",
+                "1779c568-d7bb-4bd5-bc29-13bd52ba8a0a",
+                "ee1bf431-97fa-4aba-9cc3-0cfcea779ca2",
+                "7882f70e-d228-4c52-9390-0d927c51af1f",
+                "fe564e33-8f5d-4b57-87a9-7afae02eaf97",
+                "c76d8dc7-9a66-471b-814b-ef7f3605ec93",
+                "ad40954d-0b1d-47c5-8bd5-8a1efd9a7153",
+                "8b73d354-4631-40e8-b187-e8b0580bd6ea",
+                "5117d567-2004-c5ed-1391-f8831864696f",
+                "fcd7c5d7-42f4-4dcb-bc84-d976fafd5df4",
+                "c677b35c-0432-4ee5-af57-1f95449c48b6",
+                "c5484f1a-2321-453f-9469-dfcf709e2e2e",
+                "ba37e2a0-1bf7-41ca-bddd-35fcb77f87de"
+              ],
+              "brand_name": [
+                "OFLOXACIN OTIC",
+                "OFLOXACIN OPHTHALMIC",
+                "OFLOXACIN",
+                "OCUFLOX"
+              ],
+              "manufacturer_name": [
+                "Akorn, Inc.",
+                "Altaire Pharmaceuticals Inc.",
+                "Dr. Reddy's Laboratories Limited",
+                "Hi-Tech Pharmacal Co., Inc.",
+                "Larken Laboratories, Inc.",
+                "Allergan, Inc.",
+                "Rising Pharmaceuticals, Inc.",
+                "Bausch & Lomb Incorporated",
+                "Apotex Corp.",
+                "Cadila Pharmaceuticals Limited",
+                "Amneal Pharmaceuticals NY LLC",
+                "Henry Schein Inc.",
+                "MWI",
+                "Nivagen Pharmaceuticals, Inc."
+              ],
+              "unii": [
+                "A4P49JAZ9H"
+              ],
+              "rxcui": [
+                "207202",
+                "312075",
+                "198048",
+                "198049",
+                "198050",
+                "242446"
+              ],
+              "spl_id": [
+                "2d731281-5564-43ff-9889-07931fb2c555",
+                "3e4a3dc8-8e55-cc6e-6fb1-3796147f4607",
+                "84d7029b-f19a-4360-9fec-7a5e9282b7d7",
+                "285d54dd-a0d8-44cf-b45b-287e708689d1",
+                "3fc21b59-1737-4e42-8e35-98eb9256a4d3",
+                "4662b8b1-2cfe-4472-bd5b-374737254a4f",
+                "6467bdfc-698a-416e-97ed-f05c31b69063",
+                "5e988471-3379-4f68-be87-172e7ca7ac99",
+                "889d4bcc-0b25-f208-dea4-aedf75197224",
+                "0095d1d6-d83e-4e22-aa61-3b4753f0753b",
+                "bd2baa03-a145-4320-b7ca-d63f6343e9d6",
+                "8a21bee4-9f42-27bb-e053-2a95a90ada92",
+                "8f54f003-e7c5-49d1-8369-15a1c38f4597",
+                "0d187321-481b-4030-96b6-2df0bf5b0487",
+                "df580e2b-f6c3-4ae2-92ba-c8a0dd3fe993",
+                "c41b0332-f580-4927-8621-9af1452f8ac6",
+                "10502b8b-1e97-4767-9f1b-1e06d435b5f1",
+                "48a41c0b-59f7-ef15-7639-30323f6d631b"
+              ],
+              "substance_name": [
+                "OFLOXACIN"
+              ],
+              "product_type": [
+                "HUMAN PRESCRIPTION DRUG"
+              ],
+              "route": [
+                "AURICULAR (OTIC)",
+                "ORAL",
+                "OPHTHALMIC"
+              ],
+              "application_number": [
+                "ANDA076407",
+                "NDA019921",
+                "ANDA091656",
+                "ANDA076128",
+                "ANDA076527",
+                "ANDA211525",
+                "ANDA076622",
+                "ANDA076513",
+                "ANDA076616",
+                "ANDA202692",
+                "ANDA078559",
+                "ANDA076615",
+                "ANDA076093",
+                "ANDA077098"
+              ]
+            },
+            "medicinalproduct": "OFLOXACIN"
+          }
+        ]
+      },
+      "seriousnesshospitalization": "1",
+      "transmissiondate": "20041129",
+      "serious": "1",
+      "receiptdate": "20040315"
+    },
+    {
+      "receiptdateformat": "102",
+      "receiver": null,
+      "seriousnessdeath": "1",
+      "companynumb": "JACAN16471",
+      "receivedateformat": "102",
+      "primarysource": {
+        "qualification": "3",
+        "reportercountry": "CANADA"
+      },
+      "transmissiondateformat": "102",
+      "fulfillexpeditecriteria": "1",
+      "safetyreportid": "5801206-7",
+      "sender": {
+        "senderorganization": "FDA-Public Use"
+      },
+      "receivedate": "20080707",
+      "patient": {
+        "patientonsetage": "26",
+        "patientdeath": {
+          "patientdeathdate": null,
+          "patientdeathdateformat": null
+        },
+        "reaction": [
+          {
+            "reactionmeddrapt": "DRUG ADMINISTRATION ERROR"
+          },
+          {
+            "reactionmeddrapt": "OVERDOSE"
+          }
+        ],
+        "patientonsetageunit": "801",
+        "patientsex": "1",
+        "drug": [
+          {
+            "drugindication": "DRUG ABUSE",
+            "drugadministrationroute": "041",
+            "drugcharacterization": "1",
+            "drugauthorizationnumb": "019813",
+            "medicinalproduct": "DURAGESIC-100"
+          }
+        ]
+      },
+      "transmissiondate": "20090109",
+      "serious": "1",
+      "receiptdate": "20080625"
+    },
+    {
+      "reporttype": "1",
+      "receiptdateformat": "102",
+      "receiver": {
+        "receivertype": "6",
+        "receiverorganization": "FDA"
+      },
+      "companynumb": "1289378",
+      "safetyreportversion": "1",
+      "receivedateformat": "102",
+      "primarysource": {
+        "qualification": "5",
+        "reportercountry": "US"
+      },
+      "duplicate": "1",
+      "transmissiondateformat": "102",
+      "fulfillexpeditecriteria": "2",
+      "safetyreportid": "10003300",
+      "sender": {
+        "senderorganization": "FDA-Public Use",
+        "sendertype": "2"
+      },
+      "receivedate": "20140306",
+      "patient": {
+        "patientonsetage": "77",
+        "reaction": [
+          {
+            "reactionmeddraversionpt": "17.0",
+            "reactionmeddrapt": "Vomiting"
+          },
+          {
+            "reactionmeddraversionpt": "17.0",
+            "reactionmeddrapt": "Diarrhoea"
+          },
+          {
+            "reactionmeddraversionpt": "17.0",
+            "reactionmeddrapt": "Arthralgia"
+          },
+          {
+            "reactionmeddraversionpt": "17.0",
+            "reactionmeddrapt": "Headache"
+          }
+        ],
+        "patientonsetageunit": "801",
+        "patientsex": "2",
+        "drug": [
+          {
+            "drugstartdateformat": "102",
+            "drugindication": "OSTEOPOROSIS",
+            "drugbatchnumb": "H6200HO3",
+            "drugadministrationroute": "042",
+            "drugcharacterization": "1",
+            "drugstartdate": "20130913",
+            "drugstructuredosagenumb": "3",
+            "drugdosagetext": "3 MG, 1 IN 3 M, INTRAVENOUS (NOT OTHERWISE SPECIFIED)",
+            "openfda": {
+              "product_ndc": [
+                "0004-0191"
+              ],
+              "package_ndc": [
+                "0004-0191-09"
+              ],
+              "generic_name": [
+                "IBANDRONATE SODIUM"
+              ],
+              "spl_set_id": [
+                "5500be0f-8b29-450c-9857-755029965157"
+              ],
+              "brand_name": [
+                "BONIVA"
+              ],
+              "manufacturer_name": [
+                "Genentech, Inc."
+              ],
+              "unii": [
+                "J12U072QL0"
+              ],
+              "rxcui": [
+                "904952",
+                "904954"
+              ],
+              "spl_id": [
+                "4ff248ee-1e81-4ab9-b58f-d3e1b69e191f"
+              ],
+              "substance_name": [
+                "IBANDRONATE SODIUM"
+              ],
+              "product_type": [
+                "HUMAN PRESCRIPTION DRUG"
+              ],
+              "route": [
+                "INTRAVENOUS"
+              ],
+              "application_number": [
+                "NDA021858"
+              ]
+            },
+            "drugauthorizationnumb": "021858",
+            "drugstructuredosageunit": "003",
+            "medicinalproduct": "BONIVA"
+          }
+        ]
+      },
+      "transmissiondate": "20141002",
+      "serious": "1",
+      "reportduplicate": {
+        "duplicatesource": "GENENTECH",
+        "duplicatenumb": "1289378"
+      },
+      "receiptdate": "20140306",
+      "primarysourcecountry": "US",
+      "seriousnessdisabling": "1"
+    }
+  ]
+}

@@ -1,0 +1,296 @@
+---
+title: "4.1. Working with Data"
+output:
+     slidy_presentation
+---
+
+```{r, echo = FALSE, results = 'hide', message = FALSE}
+## Install a package if not already installed
+installIfNeeded <- function(packages, ...) {
+    toInstall <- packages[!(packages %in% installed.packages()[, 1])]
+    if (length(toInstall) > 0) {
+        install.packages(toInstall, repos = "https://cloud.r-project.org")
+    }
+}
+
+## Ensure packages exist and activate them
+needPackages <- function(packages) {
+    installIfNeeded(packages)
+    for (x in packages) {
+        library(x, character.only = TRUE)
+    }
+}
+needPackages("tidyverse")
+```
+
+Getting data into R is only the first step. Often it has to be
+transformed and manipulated in several ways to extract meaningful
+information for dissemination. In some cases, the transformation may
+be very simple such as remove empty values or focus on a few selected
+variables. In other cases, the transformation may be so involved that
+it is only possible to understand them by breaking it down into a
+series of small steps.
+
+A useful abstraction for thinking about data transformation is a
+pipeline. This will become clear by means of an example.
+
+___
+
+Consider the Mt. Umunhum data that we read into R and saved in lecture
+2.
+
+```{r}
+mtu <- readRDS("mtu.RDS")
+names(mtu)
+```
+
+Recall that we plotted the data simply as follows.
+
+```{r}
+library(ggplot2)
+qplot(x = `Date and Time (PST)`, y = `Value (in)`, data = mtu)
+```
+
+___
+
+For convenience, let us rename the data columns.
+```{r}
+names(mtu) <- c("Sensor", "DateAndTime", "Precipitation")
+saveRDS(mtu, file = "mtu2.RDS")
+```
+
+
+Let us examine the beginning of this data frame using the R
+function.
+
+```{r}
+knitr::kable(head(mtu))
+```
+
+And the end of this dataset.
+
+```{r}
+knitr::kable(tail(mtu))
+```
+
+Well, the data is measured by the sensor every so often and many of
+the measurements are repetitious. Furthermore, the time is not ordered
+in the data and the number of measurements on a day varies. Could be
+many reasons why that is the case, including faults with sensor.
+
+___
+
+It makes sense to summarize the data by days. A simple way to
+summarize the data for a day would be take the maximum and the minimum
+for the day (since the reservoir precipitation data is cumulative) and
+just average the two. Note the number of measurements per day is not a
+fixed number; it varies and as we noticed in the plot---sensors have
+been known to take christmas breaks! So our procedure better be immune
+to any such simplistic assumptions.
+
+The steps for creating a new, day-based, two-column, data frame from
+the original are:
+
+1. Group the precipitation by the days
+2. Calculate the minimum and maximum of the precipitation for each group
+3. Calculate the average of the minimum and maximum for each group.
+
+___
+
+## 4.1.1 The vanilla approach
+
+We will first do it the naive way using basic R functionality and then
+later show how newer packages can make this process very clear and
+transparent.
+
+___
+
+### Step 1
+
+Let us convert the `DateAndTime` column to just date using R's
+function `as.Date`. 
+
+```{r}
+mtu$Date <- as.Date(mtu$DateAndTime)
+knitr::kable(head(mtu))
+```
+
+As you can see, we now have repeated dates since the time part was
+dropped. Implicitly, we have also created groups---those rows of the
+data frame that have the same date belong to the same group. The
+function `unique` will return the unique values of the dates. Since we
+need to create a container data frame for the new data frame, let us
+do so and leave the `Rainfall` variable missing for now.
+
+```{r}
+PrecipitationByDate <- data.frame(Date = unique(mtu$Date),
+                            Precipitation = NA)
+knitr::kable(head(PrecipitationByDate))
+```
+
+___
+
+
+### Step 2
+
+For each group we need the maximum and minimum. The R function `range`
+returns a vector of two numbers, the first being the minimum, the
+second, the maximum. (It also works with a single number.) So the
+reservoir precipitation values for each group have to be fed to the
+`range` function.  
+
+In other words, we have to loop over each date, _subsetting_ the data
+for each group (each day for us) and then compute the range. R
+provides the `subset` function to select rows of the data frame per a
+condition; for us the condition will be selecting rows which match
+each date.
+
+```{r}
+for (i in PrecipitationByDate$Date) {
+    dateSubset <- subset(mtu, Date == i)
+    cat("Date:", i, "Range:", range(dateSubset$Precipitation), "\n")
+}
+```
+
+The variable `aDate` is repeatedly set to each of the `Date` values in
+turn. The `subset` command in R takes two arguments: a data frame and
+a subsetting condition. It selects only those rows (but all columns)
+of the data frame where the `Date` values are equal to `aDate`. The
+result of `subset`, which is `dateSubset`, is another data
+frame. Finally, the `range`, of course, just computes the minimum and
+the maximum.
+
+Of course, we have not assigned the result of the range anywhere yet;
+we're only printing it but let us proceed anyway.
+
+___
+
+### Step 3
+
+It seems trivial to compute the mean once the range is available above
+so it can be combined with what we do in the previous step. Now all
+that remains is to assign these values in the `mtu` data
+frame rather than print it. This requires the use of a row index
+variable, `i`:
+
+```{r}
+i <- 0
+for (aDate in PrecipitationByDate$Date) {
+    dateSubset <- subset(mtu, Date == aDate)
+    i <- i + 1
+    PrecipitationByDate$Precipitation[i] <- mean(range(dateSubset$Precipitation))
+}
+knitr::kable(head(PrecipitationByDate))
+```
+
+___
+
+__Aside__: The approach above seems straightforward, especially to
+those who have familiarity with other languages. However, it is one
+among many and, in fact, something to be avoided. Experienced _useRs_
+would do something along the lines below.
+
+```{r}
+PrecipitationByDay <- mtu
+PrecipitationByDay$Date <- as.Date(PrecipitationByDay$DateAndTime)
+PrecipitationByDay <- aggregate(PrecipitationByDay,
+                           by = list(Date = PrecipitationByDay$Date),
+                           FUN = function(x) mean(range(x)))
+PrecipitationByDay <- PrecipitationByDay[, -c(2, 3, 5)] ## remove unnecessary columns
+knitr::kable(tail(PrecipitationByDay))
+```
+
+## 4.1.2 A `dplyr` approach
+
+We now discuss how to do this using the `dplyr` pipeline which
+provides tailor-made verbs for these steps. Combined with a pipeline
+abstraction, it becomes a powerful way to construct data
+transformations and summaries.
+
+_A broader discussion of pipes and `dplyr` will follow later._
+
+```{r}
+library(dplyr)
+```
+
+The key thing to recognize in our task is that we are performing some
+_common_ actions that can be summarized as verbs. For us, those
+_sequential_ actions are:
+
+1. _Group_ by Date
+2. _Summarize_ by mean of range.
+
+Let us go through the steps.
+
+___
+
+### Step 1
+
+First, the `dplyr::group_by` verb groups the reservoir precipitation by the `Date`
+variable, that is created by converting the original `DateAndTime`
+using `as.Date`. Note the succinct invocation!
+
+```{r}
+d1 <- dplyr::group_by(Date = as.Date(DateAndTime), .data = mtu)
+knitr::kable(head(d1))
+```
+
+The result is another data frame with an additional column named
+`Date` which is the grouping variable. 
+
+We can check that the grouping variable is `Date` as follows:
+
+```{r}
+dplyr::groups(d1)
+```
+
+___
+
+### Step 2
+
+The `dplyr::summarize` verb reduces a number of values to a single
+value, which is what `mean` does. Thus, we only have to summarize the
+result of the above with using the `mean` function.
+
+```{r}
+d2 <- dplyr::summarize(.data = d1, Precipitation = mean(range(Precipitation)))
+knitr::kable(head(d2))
+```
+
+Now we have one value for each date.  And, we can plot the day by day
+cumulative precipitation for Mt. Umunhum during the recent rains.
+
+```{r}
+library(ggplot2)
+ggplot(data = d2) +
+    geom_line(mapping = aes(x = Date, y = Precipitation))
+```
+
+## 4.1.3. Remarks
+
+We could have combined the steps, dispensing with storing the
+intermediate values, to get the same result.
+
+```{r}
+d3 <- summarize(
+    group_by(Date = as.Date(DateAndTime),
+             .data = mtu),
+    Precipitation = mean(range(Precipitation))
+)
+identical(d3, d2)
+```
+
+## 4.1.4 References
+
+The vignettes of the packages `dplyr` are concise and clear and worth
+reading.
+
+- [`dplyr`](https://cran.r-project.org/package=dplyr)
+
+
+## Session Info
+```{r}
+sessionInfo()
+```
+
+

@@ -1,0 +1,489 @@
+---
+title: "6.1. Applications"
+output:
+     slidy_presentation
+---
+
+```{r, echo = FALSE, results = 'hide', message = FALSE}
+## Install a package if not already installed
+installIfNeeded <- function(packages, ...) {
+    toInstall <- packages[!(packages %in% installed.packages()[, 1])]
+    if (length(toInstall) > 0) {
+        install.packages(toInstall, repos = "https://cloud.r-project.org")
+    }
+}
+
+## Ensure packages exist and activate them
+needPackages <- function(packages) {
+    installIfNeeded(packages)
+    for (x in packages) {
+        library(x, character.only = TRUE)
+    }
+}
+needPackages(c("tidyverse", "png"))
+```
+
+## 6.1.1. Bay Area Bike Share Data
+
+The [Bay Area Bike share](https://www.fordgobike.com/system-data)
+program has an open data portal that has a large amount of anonymized
+data on bike trips taken by users of he program. The data is quite
+clean, but still affords a nice opportunity to make sense of it. There
+are many questions we can ask, but we will just focus on computing
+some basic summaries on the data. This will offer a good opportunity
+to use the facilities offered by `dplyr`, for example.
+
+The data set is reasonably large and so we want to avoid any
+unnecessary processing, unless absolutely essential.  So we will use
+the `readr::read_csv` to import the data.
+
+___
+
+The main datasets of interest to us, per the README.txt file included
+with the data are:
+
+1. The Station Information (file `201508_station_data.csv`)
+2. The Trip data (file `201508_trip_data.csv`)
+3. The Weather data (file `201508_weather_data.csv`)
+
+## 6.1.2. Read the data into R
+
+We first deal with the station data:
+
+```{r}
+library(readr)
+stationData <- read_csv("babs/201508_station_data.csv")
+```
+
+We want to know how many stations there are, how many cities, how many
+docks per city etc. 
+
+
+## 6.1.2. How many stations?
+
+
+```{r}
+library(dplyr)
+## How many stations?
+stationData %>% nrow
+```
+
+## 6.1.3. How many cities in the Bay area participate?
+
+```{r}
+## How many cities
+stationData %>%
+    distinct(landmark)
+```
+
+## 6.1.4. How many docks are available per city?
+
+```{r}
+## How many docks per city
+stationData %>%
+    group_by(landmark) %>%
+    summarize(count = n())
+```
+
+___
+
+We turn our attention to the trip data. 
+
+Below, we provide better names (with no spaces) and specify how the
+date values should be parsed. We only need to provide the information
+for those types that are not detected correctly; for us, just the
+dates.
+
+```{r}
+read_csv("babs/201508_trip_data.csv",
+         col_names = c("TripId", "Duration", "StartDate", "StartStation",
+                       "StartTerminal", "EndDate", "EndStation", "EndTerminal",
+                       "BikeNo", "SubscriberType", "ZipCode"),
+         skip = 1,
+         col_types = cols(
+             StartDate = col_datetime( format = "%m/%d/%Y %H:%S"),
+             EndDate = col_datetime( format = "%m/%d/%Y %H:%S")
+         )) ->
+    tripData
+tibble::glimpse(tripData)
+```
+
+We are now in better shape to answer some questions.
+
+## 6.1.4. How many trips in the data set?
+
+An obvious try is:
+
+```{r}
+tripData %>%
+    nrow
+```	
+
+A more defensive and safer thing to do is to use `TripId` since it is
+guaranteed to be distinct for each trip. We do that below, but it
+makes no difference here.
+
+```{r}
+tripData %>%
+    distinct(TripId) %>%
+    nrow
+```
+
+## 6.1.5. What period does this dataset cover?
+
+```{r}
+tripData %>%
+    summarize(start = as.Date(min(StartDate)), end = as.Date(max(EndDate)))
+```
+
+## 6.1.6. What was the total amount of riding time in years?
+
+```{r}
+tripData %>%
+    summarize(total = ((sum(Duration) / 3600) / 24) / 365)
+```
+
+## 6.1.7. Busiest and Slowest days
+
+We first create a `tripCount` data set to work with.
+
+```{r}
+tripData %>%
+    mutate(Date = as.Date(StartDate)) %>%
+    group_by(Date) %>%
+    summarize(trips = n()) ->
+    tripCounts
+```
+
+Let us print the first few rows to see what this looks like.
+
+```{r}
+tripCounts %>% print(n = 20)
+```
+___
+
+Now we can compute the busiest and slowest days, respectively
+
+```{r}
+tripCounts %>%
+    arrange(desc(trips)) %>%
+    filter(row_number() == 1 | row_number() == n())
+```
+
+We can further add information on what day of the week it was for some
+insight.  This requires figuring out the day of the week given a
+date. 
+
+The R function `base::weekdays` will compute the day of the week for
+any proper date. 
+
+```{r}
+tripCounts %>%
+    arrange(desc(trips)) %>%
+    filter(row_number() == 1 | row_number() == n()) %>%
+    mutate(WeekDay = base::weekdays(Date))
+```
+
+## 6.1.8. How many rides per week day, on average? How many per weekend day?
+
+We ignore holidays. We need a way to detect weekend or not, which is
+now easy using the day of the week. Let us create a new trip count
+data set with these variables.
+
+```{r}
+tripData %>%
+    mutate(Date = as.Date(StartDate),
+           DayOfWeek = base::weekdays(Date),
+           Weekend = DayOfWeek %in% c("Saturday", "Sunday")) %>%
+    group_by(Date, Weekend) %>%
+    summarize(trips = n()) ->
+    tripCounts2
+```
+
+So now we have a new variable that tells us whether we have a weekend
+or not.
+
+```{r}
+tibble::glimpse(tripCounts2)
+```
+
+Computing the average rides per weekday and weekends is now a
+straightforward summarization.
+
+```{r}
+tripCounts2 %>%
+    group_by(Weekend) %>%
+    summarize(avgTrips = mean(trips))
+```
+
+## 6.1.9. Example from survival analysis (SEER)
+
+If you go to [Cancer Center
+Statistics](http://www.cancercenter.com/breast-cancer/statistics/tab/breast-cancer-survival-statistics/)
+Cancer Centers of America website for example, you will see some
+comparison as to how their hospitals do regarding survival rates for
+various cancers They compare, for example, their survival rates to
+national rates using data from the [Surveillance, Epidemiology and End
+Results](https://seer.cancer.gov/registries/) (SEER)
+database. Five-year survival statistics are common.
+
+__The Problem__To construct statistical summaries to compare how our
+Cancer center compares to national statistics.
+
+One can request the SEER data and combine it with local data to do the
+comparison._The SEER data is large!_ Over 2 million rows containing
+over 40 variables, including survival time.
+
+__NOTE__ Due to restrictions on SEER data, I am unable to distribute
+this data for the class. However, here is the production code we
+actually use for doing this comparison.
+
+## 6.1.10. Data Ingestion and Preparation
+
+First, the preamble, which loads libraries, reads the data and ensures
+that we don't process data more often than necessary.
+
+```{r, eval = FALSE}
+library('survival')
+library(ggplot2)
+library(GGally)
+library(magrittr)
+library(dplyr)
+library(readr)
+
+## CUSTOMIZE CUTOFF YEARS HERE. These are varied for different years!
+startYear <- 2005
+splitYear <- 2008
+currentSeerYear <- 2012
+seerdataFile <- "seerdata.gzip"
+stanfordFile <- "localdata.tsv"  ## actually in a database!
+```
+
+Next the code for processing the data.
+
+```{r, eval = FALSE}
+seer <- readr::read_table(file = seerdataFile, col_names = TRUE,
+                   na = c("Blank(s)", "N/A"))
+stanford <- readr::read_table(file = stanfordFile, col_names = TRUE)
+```	
+
+## 6.1.11. Data Filtering and Transformations
+
+Below, we go through several steps.
+
+```{r, eval = FALSE}
+seer %>%
+    ## Select only relevant year data on primary malignancies
+    filter(
+        SEX %in% c("Male", "Female"),
+        FIRST_MALIG_PRIMARY == "Yes",
+        SEQUENCE_NUMBER %in% c("One primary only"),
+        DX_CONFIRMATION != "Unconfirmed",
+        DX_YR >= startYear,
+        DX_YR <= currentSeerYear,
+        SURVIVAL_MONTHS_PRESUME_ALIVE < 400
+    ) %>%
+    ## Recode some variables and create new ones
+    mutate(
+        id = PATIENT_ID,
+        dx_yr = DX_YR,
+        site_code = substr(PRIMARY_SITE_LABEL, 1, 5),
+        hist_code = HIST_TYPE_CODE,
+        stage = ifelse(is.na(DERIVED_AJCC_STG_6), DERIVED_AJCC_STG_7, DERIVED_AJCC_STG_6),
+        time = as.numeric(SURVIVAL_MONTHS_PRESUME_ALIVE),
+        event = ifelse(VITAL_STATUS_RECODE == "Dead", 1, 0)
+    ) %>%
+    mutate(
+        STG4 = as.integer(grepl("^IV", stage)),
+        STG3 = as.integer(grepl("^III", stage)),
+        STG2 = as.integer(grepl("^II", stage)),
+        STG1 = as.integer(grepl("^I", stage)),
+        STG0 = as.integer(grepl("^0", stage))
+    ) %>%
+    ### More stuff
+    mutate(
+        simple_stg = ifelse(SIMPLE_STG == 0, NA, SIMPLE_STG - 1),
+        source = "SEER"
+    ) %>%
+    ## Select only variables of interest to us
+    select(source, dx_yr, site_code, hist_code, stage, time, event, simple_stg) ->
+    seerData
+```
+
+Do the same for Stanford data, slightly different from SEER.
+
+```{r, eval = FALSE}
+stanford %>%
+    filter(
+        SEX %in% c("Male", "Female"),
+        FIRST_MALIG_PRIMARY == "Yes",
+        SEQUENCE_NUMBER %in% c("One primary only"),
+        DX_CONFIRMATION != "Unconfirmed",
+        DX_YR >= startYear,
+        DX_YR <= currentSeerYear,
+        DX_AGE_RECODE >= 19
+    ) %>%
+    mutate(
+        id = PATIENT_ID,
+        dx_yr = DX_YR,
+        site_code = PRIMARY_SITE_CODE,
+        hist_code = HIST_TYPE_CODE,
+        stage = DERIVED_AJCC_STG_7,
+        time = SURVIVAL_MONTHS_PRESUME_ALIVE,
+        event = ifelse(VITAL_STATUS_RECODE == "Dead", 1, 0)
+    ) %>%
+    mutate(
+        STG4 = as.integer(grepl("^IV", stage)),
+        STG3 = as.integer(grepl("^III", stage)),
+        STG2 = as.integer(grepl("^II", stage)),
+        STG1 = as.integer(grepl("^I", stage)),
+        STG0 = as.integer(grepl("^0", stage))
+    ) %>%
+    ### More stuff
+    mutate(
+        simple_stg = ifelse(SIMPLE_STG == 0, NA, SIMPLE_STG - 1),
+        source = "STANFORD"
+    ) %>%
+    select(source, dx_yr, site_code, hist_code, stage, time, event, simple_stg) ->
+    suData
+```
+
+Combine the entire dataset into one
+
+```{r, eval = FALSE}
+allData <- rbind(seerData, suData)
+```
+
+## 6.1.12. Focus on one cancer
+
+Each cancer has a set of ICD codes and histology codes corresponding
+to it. For example, for breast cancer, it is
+
+```{r, eval = FALSE}
+icdCodes <- c("C50.0", "C50.1", "C50.2", "C50.3", "C50.4", "C50.5", "C50.6",
+              "C50.7", "C50.8", "C50.9");
+histCodes <- c(seq(8000, 8231), seq(8250, 8575));
+cancerType <- "Breast Cancer"
+```
+
+Our goal is to generate a report for each cancer and so we need a
+helper function.
+
+```{r, eval = FALSE}
+#' Generate report for one cancer
+#' @param icdCodes the ICD codes for the cancer of interest
+#' @param histCodes the histology codes for the cancer of interest
+#' @param cancerName the cancer name as a string
+#' @param ci flag to denote if confidence interval desired or not, default FALSE
+#' @param plot.cems should the censored observations be plotted? Default FALSE
+#' @return a named list of items
+#'  \describe{
+#'     \item{suSummary}{Stanford data frame of summary counts}
+#'     \item{barPlot}{A ggplot barplot object of frequency of cases by year}
+#'     \item{survFits}{a list of four survival fit objects, one per stage I, II, II, IV}
+#'     \item{survPlots}{a list of four ggplot survival plot objects, one per stage I, II, II, IV}
+#'     \item{overallFit}{An overall surivival fit object}
+#'     \item{overallPlot}{An overall survival ggplot object}
+#'
+doOneCancer <- function(icdCodes = NULL, histCodes = NULL, cancerName,
+                        ci = FALSE, plot.cens = FALSE, ...) {
+    d <- if (is.null(icdCodes) && is.null(histCodes)) {
+        allData
+    } else if (is.null(icdCodes)) {
+        filter(allData, hist_code %in% histCodes)
+    } else {
+        filter(allData, site_code %in% icdCodes)
+    }
+    ## Summarize Local Data
+    suSummary <-
+        d %>%
+        filter(source == "STANFORD") %>%
+        group_by(dx_yr) %>%
+        summarize(count = n())
+
+    g <- ggplot(data = suSummary, aes(x = dx_yr, y = count)) +
+        geom_bar(stat = "identity" )
+
+    ## Do for each stage 0, 1, 2, 3, 4
+    fits <- lapply(0:4,
+                   function(x) {
+                       subData <- d %>%
+                           filter(simple_stg == x)
+                       if (nrow(subData) > 0) {
+                           survfit(Surv(time, event) ~ source, data = subData)
+                       } else {
+                           NULL
+                       }
+                   })
+
+    plots <- lapply(0:4,
+                    function(x) {
+                        obj <- fits[[x + 1]]
+                        if (!is.null(obj)) {
+                            ggsurv(fits[[x + 1]], xlab = "Months Post-Dx", ylab = "Survival",
+                                   main = sprintf("%s survival (stage %d)", cancerName, x),
+                                   plot.cens = FALSE, CI = FALSE, ...) +
+                                xlim(0, 125) + ylim(0, 1)
+                        } else {
+                            NULL
+                        }
+                    })
+
+    overallFit <- survfit(Surv(time, event) ~ source, data = d)
+    overallPlot <- ggsurv(overallFit, xlab = "Months Post-Dx", ylab = "Survival",
+                          main = sprintf("%s survival (all stages)", cancerName),
+                          plot.cens = FALSE, CI = FALSE, ...) +
+        xlim(0, 125) + ylim(0, 1)
+
+    list(suSummary = suSummary, barPlot = g, survFits = fits, survPlots = plots,
+         overallFit = overallFit, overallPlot = overallPlot)
+}
+```
+
+Once we have this, all we have to do is invoke it.
+
+```{r, eval = FALSE}
+result <- doOneCancer(icdCodes, histCodes, cancerType)
+```
+
+We can then print summaries, plots etc. easily as follows
+
+```{r, eval=FALSE}
+#### Stanford Summary
+result$suSummary
+## Bar plot of cases
+result$barPlot
+## Stage 0
+result$survPlots[[1]]
+#### Stage 1
+result$survPlots[[2]]
+#### Stage 2
+result$survPlots[[3]]
+#### Stage 3
+result$survPlots[[4]]
+#### Stage 4
+result$survPlots[[5]]
+```
+
+In our actual production system, our R code uses these functions to
+generate markdown which is `rendered` into a report.
+
+## 6.1.12. Some screenshots
+
+```{r, echo = FALSE}
+library(grid)
+img <- readPNG("master.png")
+grid.raster(img)
+```
+
+___
+
+```{r, echo = FALSE}
+img <- readPNG("surv.png")
+grid.raster(img)
+```
+
+## Session Info
+```{r}
+sessionInfo()
+```

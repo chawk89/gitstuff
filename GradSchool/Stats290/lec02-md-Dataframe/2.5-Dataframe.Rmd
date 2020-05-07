@@ -1,0 +1,163 @@
+---
+title: "2.5. Data frames"
+output:
+     slidy_presentation
+---
+
+Data frames are a fundamental construct in R for statistical
+analysis. Many modeling and plotting functions assume data is in a
+`data.frame`. 
+
+Basically, a data frame is a logical view of what a statistician would
+call an analysis data set: 
+
+- rows denote observations
+- columns denote variables. 
+
+Despite its superficial similarity to a matrix, it is not the same
+however, the entries are not homogeneous.
+
+(Data frames are in python too: `pandas` provides a data frame.  There
+also exist efficient binary, cross-platform packages for data frames,
+such as [Apache Parquet](https://parquet.apache.org/)) 
+
+___
+
+The function `data.frame` constructs a data frame.
+
+```{r}
+d <- data.frame(x = LETTERS[1:3], y= rnorm(3))
+class(d)
+typeof(d)
+```
+
+Underneath, a data frame is implemented as a list. So the list
+semantics can be applied.
+
+```{r}
+d[[1]]
+```
+
+```{r}
+dim(d)  ## like matrix
+```
+
+```{r}
+length(d) ## like list
+```
+
+```{r}
+str(d)
+```
+
+___
+
+You can create empty data frames and add rows as needed later, but you
+have to plan ahead for what you want to do.
+
+```{r}
+d2 <- data.frame(x = numeric(0), y = character(0))
+```
+
+Now add a row.
+
+```{r}
+d2[1, ] <- c(1, "a") ## warning generated
+d2 ## print it
+```
+___
+
+By default, character observations are turned into factors in the
+constructor function (also in data reading functions such as
+`read.table`, `read.csv` etc.) unless explicitly noted. This can cause
+some surprises if you are not careful; more on this later. So use the
+`stringsAsFactors` flag to control behavior.
+
+So presumably, what we want is this:
+
+```{r}
+d2 <- data.frame(x = numeric(0), y = character(0), stringsAsFactors = FALSE)
+d2[1, ] <- c(1, "a") ## ok now.
+d2[3, ] <- c(3, "c")
+d2
+```
+
+```{r}
+d <- data.frame(x = LETTERS[1:3], y = rnorm(3), stringsAsFactors = FALSE)
+str(d)
+```
+___
+
+Extract each variable using dollar (`$`) syntax.
+
+```{r}
+d$x
+d$y
+d$z
+```
+___
+
+Row and column names.
+
+```{r}
+rownames(d)
+colnames(d)
+```
+
+Modify the default row names.
+```{r}
+rownames(d) <- paste("S", 1:nrow(d), sep = "-")
+d
+```
+
+Access rows using row names as indexing variables.
+```{r}
+d["S-2", ]
+```
+
+___
+
+Some edge cases.
+```{r}
+d[0, ]
+```
+
+```{r}
+d[NA, ]
+```
+
+```{r}
+d[NA_integer_, ]
+```
+
+Explain the last two results!
+
+___
+
+Add variable to the data frame.
+
+```{r}
+d$z <- letters[1:3]
+str(d) ## note that z is not a factor
+```
+
+What objects are the row and column projections?
+
+Row projection.
+```{r}
+d[1, ]
+```
+
+Column projection.
+```{r}
+d[, 2]
+```
+
+str(d[1, ])
+str(d[, 2])
+```
+
+## Session Info
+```{r}
+sessionInfo()
+```

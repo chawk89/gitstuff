@@ -1,0 +1,49 @@
+---
+title: "25.1 R Language Interfaces"
+output:
+      slidy_presentation
+---
+
+While R is extremely useful and versatile, there are occasions where
+you would like to use a facility in some other language such as Java,
+Python, Ruby.
+
+We already saw in last class how we could talk to C/C++ code using
+`Rcpp`. 
+
+
+We briefly discuss what the possibilites are for other languages.
+
+
+## 25.1.1. A Summary Table
+
+
+|  From R     | Tool               | Reverse      | Other          |
+|:------------|:-------------------|:-------------|:---------------|
+| C/C++       | `Rcpp`             | `Rcpp`       | NA             |
+| Java        | `rJava`            | `JRI`        | `Rserve`       |
+| Javascript  | `v8`               | NA           | `shinyjs`      |
+| Python      | `reticulate`       | `rpy2`       | `pyRserve`     |
+| Ruby        | `rsruby`(?)        | ?            | `rserve-client`|
+| Most        |                    |              | `opencpu`      |
+
+
+R integration in PHP is also available (esp. for webapps).
+
+Some of the above tools are direct interfaces while the others use
+some form of Inter-Process Communication (IPC).
+
+We already saw an example of `opencpu` earlier in the context of
+distributed computing. It used a REST API.
+
+
+## Session Info
+```{r}
+sessionInfo()
+```
+
+
+
+
+
+

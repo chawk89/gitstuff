@@ -1,0 +1,157 @@
+---
+title: "28.2. Parallel R Experiments"
+output: html_document
+---
+
+```{r}
+library(glmnet)
+library(ggplot2)
+##
+## Cat function with \n at the end
+##
+catn <- function(...)
+    cat(..., "\n")
+```
+
+The `glmnet` package fits a wide range of penalized models, including
+lasso ($L_1$ penalization) and elastic net models (convex combination
+of $L_1$ and $L_2$ penalties). See the paper _Regularization Paths for
+Generalized Linear Models via Coordinate Descent_ by Friedman, Hastie,
+Tibshirani, in the Journal of Statistical Software, Vol 33, issue 1,
+where the Internet Ad document classification problem with mostly
+binary features is discussed. So we are basically fitting a penalized
+logistic regression model with lasso penalty.
+
+We will perform 10-fold cross-validation exploiting parallel
+computation. The gain in speed might not be much because we are only
+doing a small experiment.
+
+## Runs using `parallel` with 2, 3, 4 workers
+
+We first experiment with `parallel` using 2, 3, 4 workers. We create a
+function `runParallel` to help us.
+
+```{r}
+### Parallel Run
+runParallel <- function(n, seed = 12345) {
+    catn <- function(...) cat(..., "\n")
+    internetAd <- readRDS("internetAd.RDS")
+    catn("Percent non-zero per glmnet paper",
+    (sum(internetAd$x > 0) + sum(internetAd$y > 0)) /
+    (prod(dim(internetAd$x)) + length(internetAd$y)))
+
+    stopifnot(require(doParallel))
+    registerDoParallel(n)
+    set.seed(seed)
+    time <- system.time(cv <- cv.glmnet(internetAd$x, internetAd$y,
+                                        family = "binomial", type.measure = "class",
+                                        parallel = TRUE))
+    list(time = time, cv = cv)
+}
+
+resultsParallel <- lapply(2:4, runParallel)
+```
+
+A plot to show the time gains, if any. (I am using a line geom just to
+show the trend!)
+
+```{r}
+d <- data.frame(nWorkers = 2:4, t(sapply(resultsParallel, function(x) x$time)))
+qplot(x = nWorkers, y = user.self, geom="line", data = d)
+```
+
+We see that 3 workers did ok, but 4 workers actually increased the
+time (probably because of my machine only has 4 cores total).
+
+We can check the results to find which lambda gave us the minimum CV
+error. 
+
+```{r}
+lapply(resultsParallel, function(x) x$cv$lambda.min)
+```
+
+## Runs using `snow` with 2, 3, 4 workers
+
+Next, we try using the `snow` workers. SNOW stands for Simple Network
+of Workstations and can make use of machines on network.  We will, of
+course, use the only machine we have at our disposal!
+
+```{r}
+## SNOW Run
+runSnow <- function(n, seed = 12345) {
+    catn <- function(...) cat(..., "\n")
+    internetAd <- readRDS("internetAd.RDS")
+
+    catn("Percent non-zero per glmnet paper",
+    (sum(internetAd$x > 0) + sum(internetAd$y > 0)) /
+    (prod(dim(internetAd$x)) + length(internetAd$y)))
+
+    stopifnot(require(doSNOW))
+    cl <- makeCluster(n)
+    registerDoSNOW(cl)
+    set.seed(seed)
+    time <- system.time(cv <- cv.glmnet(internetAd$x, internetAd$y,
+                                        family = "binomial", type.measure = "class",
+                                        parallel = TRUE))
+    stopCluster(cl)
+    list(time = time, cv = cv)
+}
+resultsSnow <- lapply(2:4, runSnow)
+```
+
+The same plot. The overhead can be significant enough to obliterate
+any gains on my simple laptop.
+
+```{r}
+d <- data.frame(nWorkers = 2:4, t(sapply(resultsSnow, function(x) x$time)))
+qplot(x = nWorkers, y = user.self, geom = "line", data = d)
+```
+
+We can check the results to find which lambda gave us the minimum CV
+error. 
+
+```{r}
+lapply(resultsSnow, function(x) x$cv$lambda.min)
+
+```
+
+## Cluster utilization.
+
+For $n=3$ workers, we can a worker utilization plot for `runSnow`
+using `snow.time`. 
+
+```{r}
+snowPlot <- function(n, seed = 12345) {
+    catn <- function(...) cat(..., "\n")
+    internetAd <- readRDS("internetAd.RDS")
+
+    catn("Percent non-zero per glmnet paper",
+    (sum(internetAd$x > 0) + sum(internetAd$y > 0)) /
+    (prod(dim(internetAd$x)) + length(internetAd$y)))
+
+    stopifnot(require(doSNOW))
+    cl <- makeCluster(n)
+    registerDoSNOW(cl)
+    set.seed(seed)
+    plot <- snow.time(cv <- cv.glmnet(internetAd$x, internetAd$y,
+                                      family = "binomial", type.measure = "class",
+                                      parallel = TRUE))
+    stopCluster(cl)
+    list(plot = plot, cv = cv)
+}
+snowResults <- snowPlot(n = 3)
+```
+
+Utilization plot for `snow`.
+
+```{r}
+plot(snowResults$plot)
+```
+
+This utilization plot shows that all the cores were reasonably
+utilized with minimal idle times. 
+
+## Session Info
+```{r}
+sessionInfo()
+```

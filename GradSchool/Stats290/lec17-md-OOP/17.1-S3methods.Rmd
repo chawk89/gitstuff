@@ -1,0 +1,206 @@
+---
+title: 17.1. S3 Methods
+output: slidy_presentation
+---
+
+Towards the end of last class, we talked about S3 classes. S3 classes
+pervade much of `stats` package, included in base R. In particular, S3
+methods are used for printing, plotting and predicting on model
+objects. 
+
+## 17.1.1 Defining S3 methods
+
+When you have an S3 class, generics like `print` and `plot` are
+already available. So you don't need to do anything special if you
+want to invoke a `print` or a `plot` method for your object.
+
+For example, consider a data frame that can be plotted:
+
+```{r}
+d <- data.frame(a = 1:5, b = (1:5)^2)
+class(d)
+```
+If we invoke plot on it, it works fine.
+
+```{r, error = TRUE}
+plot(d)
+```
+
+___
+
+As we discussed in a previous lecture, what happened behind the scenes
+is that `graphics:::plot.data.frame` was called as can be seen from:
+
+```{r}
+methods(plot)
+```
+
+and
+
+```{r}
+getAnywhere("plot.data.frame")
+```
+___
+
+Now suppose we want to use `ggplot2` instead of base plot for the
+scatterplot.
+
+One way we could do this is to change the class.
+
+```{r}
+class(d) <- c("ggplot_able", class(d))
+class(d)
+```
+
+Now we have to define our own method for plotting, borrowing from
+`graphics:::plot.data.frame`.
+
+```{r}
+plot.ggplot_able <- function(x, ...) {
+    stopifnot(require("ggplot2"))
+    plot2 <- function(x, xlab = names(x)[1L], ylab = names(x)[2L],
+        ...) qplot(x[[1L]], x[[2L]], xlab = xlab, ylab = ylab,
+        ...)
+    if (!is.data.frame(x))
+        stop("'plot.ggplot_able' applied to non data frame")
+    if (ncol(x) == 1) {
+        qplot(x[[1L]], ...)
+    } else if (ncol(x) == 2) {
+        plot2(x, ...)
+    } else {
+        stop("plot.ggplot_able: Don't know what to do")
+    }
+}
+```
+
+And try it.
+
+```{r}
+plot(d)
+```
+
+It works.
+
+But what if you have a new method that _you_ want to write? For
+example, a function for returning a particular row in a data frame.
+
+Use `UseMethod`.
+
+```{r}
+nthRow.data.frame <- function(x, n) {
+    if (0L < n && n <= nrow(x))
+        x[n, ]
+    else
+        stop("nthRow.data.frame: Bad value for n")
+}
+
+nthRow <- function(x, n) UseMethod("nthRow")
+```
+
+And we can check.
+
+```{r}
+nthRow(d, 2)
+```
+
+
+## 17.1.2. Ramifications
+
+1. Because of this association of the period with methods for S3
+   objects, it is best to avoid periods in names of functions, even
+   though it is legitimate; it makes those functions look like methods
+   for S3 objects. So many people have started using camel-case or
+   underscores to avoid such confusion.
+
+2. There can be issues if two different packages define the same S3
+   classes and methods for them. A recent example was the case of
+   `mgcv` and `gam` both of which defined S3 classes called `gam` and
+   methods. 
+   
+3. The S3 system provides all sorts of opportunities for you to shoot
+   yourself in the foot. Consider for example the following.
+```{r, error = TRUE}
+class(d) <- "foobar"
+plot(d)
+```
+What happened?  We changed the class attribute of `d` to be something
+other than a `data.frame` and so plot went ahead and called a default
+method `plot.default`, the catch-all. And all hell broke loose.
+
+Since class is merely an attribute in the `S3` system. nothing stops
+you from changing it. So there are no guarantees with this type of
+class system.
+
+A more formal system called `S4` overcomes these issues.
+
+
+## 17.1.3. S3 in packages
+
+When you define new methods for S3 classes in packages, you need to
+make R aware of these via Roxygen tags.  Let's take an example. 
+
+Consider the `plot` method defined for `glmnet` (file
+`R/plot.glmnet.R`) and `cv.glmnet` (file `R/plot.cv.glmnet.R`) objects
+in the package `glmnet`.
+
+___
+
+The file `plot.glmnet.R` contains the following in the Roxygen section.
+
+```{r, eval = FALSE}
+#' @examples
+#' x=matrix(rnorm(100*20),100,20)
+#' y=rnorm(100)
+#' g2=sample(1:2,100,replace=TRUE)
+#' g4=sample(1:4,100,replace=TRUE)
+#' fit1=glmnet(x,y)
+#' plot(fit1)
+#' plot(fit1,xvar="lambda",label=TRUE)
+#' fit3=glmnet(x,g4,family="multinomial")
+#' plot(fit3,pch=19)
+#' @method plot glmnet
+#' @export
+plot.glmnet=function(x, xvar=c("norm","lambda","dev"),label=FALSE,...){
+  xvar=match.arg(xvar)
+ plotCoef(x$beta,lambda=x$lambda,df=x$df,dev=x$dev.ratio,label=label,xvar=xvar,...)
+}
+```
+
+Similarly, the file `plot.cv.glmnet.R` contains:
+
+```{r, eval = FALSE}
+#'
+#' @method plot cv.glmnet
+#' @export
+plot.cv.glmnet=function(x,sign.lambda=1,...) {
+    Stuff_deleted...
+}
+
+```
+
+Note how this also allows one to clearly designate what is the class
+name and what is the method name: the above clearly states that we are
+defining a method `plot` for objects of class `cv.glmnet`. 
+
+So if our `nthRow` method were part of a package, we would have the
+following Roxygen documentation
+
+```{r, eval = FALSE}
+#' @method nthRow data.frame
+```
+
+Once you have marked up the Roxygen documentation as shown, running
+`devtools::document()` for the package will generate an entry in the
+`NAMESPACE` file such as:
+
+```{r, eval = FALSE}
+S3method(plot,glmnet)
+S3method(plot,cv.glmnet)
+```
+
+## 17.1.4. Session Info
+
+```{r}
+sessionInfo()
+```
+

@@ -1,0 +1,23 @@
+Loading required package: survival
+Loading required package: stats
+[1] TRUE
+* installing *source* package ‘ted’ ...
+** using staged installation
+** R
+** byte-compile and prepare package for lazy loading
+Loading required package: survival
+Loading required package: stats
+[1] TRUE
+** help
+*** installing help indices
+** building package indices
+** testing if installed package can be loaded from temporary location
+Loading required package: survival
+Loading required package: stats
+[1] TRUE
+** testing if installed package can be loaded from final location
+Loading required package: survival
+Loading required package: stats
+[1] TRUE
+** testing if installed package keeps a record of temporary installation path
+* DONE (ted)

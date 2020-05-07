@@ -1,0 +1,173 @@
+---
+title: "27.3 Running R Scripts"
+output:
+      slidy_presentation
+---
+
+So far, our computing has been on a single machine, with multiple
+cores. Large scale parallel computations can be done on server
+clusters, examples of which on campus are farmshare and sherlock. 
+
+Before we get there, we need to understand some scripting details.  If
+you are going to do any High Performance Computing (HPC), there is no
+avoiding the command line and shell.
+
+Note also that cluster machines are typically run Unix and so there is
+some Unix-specific content here.
+
+R provides a tool called `Rscript` which is indispensable in running
+cluster jobs.  So let us examine that in some detail.
+
+## 27.3.1. Running R scripts on command line
+
+`Rscript` is a binary front-end to R, for use in scripting
+applications. It is installed by default with R. The syntax for using
+`Rscript` is:
+
+```{bash}
+Rscript --help
+```
+
+This means you can use `Rscript` to execute R expressions. For
+example, try the following in a terminal on your machine, assuming you
+have a standard set up.
+
+```{bash}
+Rscript -e 'print(rnorm(3))'
+```
+
+The arguments to `Rscript` are the following.
+
+- `expr` an optional expression to be evaluated
+- `file` input file of R expressions
+- `args` optional further arguments to be processed by the R
+ interpreter using `commandArgs` (more below).
+
+There are further options that are useful.
+
+- `--default-packages=list` Here list is a comma-separated set of package names
+- `--save` Do save workspace at the end of the session
+- `--no-environ` Don't read the site and user environment files
+- `--no-site-file` Don't read the site-wide Rprofile
+- `--no-init-file` Don't read the user R profile
+- `--restore` Do restore previously saved objects at startup
+
+
+## 27.3.2. Running R code in a script
+
+Consider now a file `testRscript.R` that contains the lines
+
+```{r, eval = FALSE}
+set.seed(123)
+print(rnorm(3))
+```
+
+To run this all you have to do a shell prompt is:
+
+```{bash}
+Rscript testRscript.R
+```
+
+Now suppose we wanted to make `testRscript.R` into a command. That is
+we want to avoid having to type `Rscript testRscript.R`. Rather we
+would like to simply execute `testRscript.R` directly.
+
+___
+
+Here are the steps. Note that these apply to Unix-like operating
+system only.
+
+1. Modify the file `testRscript.R` to include a first like exactly as
+indicated.
+
+```{r, eval = FALSE}
+#!/usr/bin/env Rscript
+set.seed(123)
+print(rnorm(3))
+```
+
+2. Make it executable by setting the executable permission bit.
+```{bash, eval = FALSE}
+chmod +x testRscript.R
+```
+3. Run it.
+```{bash}
+./testRscript.R
+```
+
+## 27.3.3. Parametrizing the script
+
+Suppose we wish to be able to pass parameters to our script. In other
+words, we would like to be able to specify the seed as well as the
+number of random normals we want to be printed. `Rscript` has
+facilities for this purpose.  Here is `testRscript2.R` that prints out its
+arguments.
+
+```{r, eval = FALSE}
+#!/usr/bin/env Rscript
+args <- commandArgs()
+print(args)
+```
+
+Here are some test invocations.
+
+```{bash}
+./testRscript2.R
+```
+
+```{bash}
+./testRscript2.R 1 2 3
+```
+
+```{bash}
+./testRscript2.R a=1 b=2 c=3
+```
+
+```{bash}
+./testRscript2.R --a=1 --b=2 --c=3
+```
+
+Note that `args` vector of strings!
+
+___
+
+So now we can parametrize our random normals script---we'll name it
+`testRscript3.R`---as follows.
+
+
+```{r, eval = FALSE}
+#!/usr/bin/env Rscript
+args <- commandArgs(trailingOnly = TRUE)
+
+if (length(args) != 2) {
+    ## We expect two arguments
+    stop("Usage: testRscript2.R random_seed no_of_normals_to_print")
+}
+seed <- as.integer(args[1])
+n <- as.integer(args[2])
+set.seed(seed)
+print(rnorm(n))
+```
+
+The `trailingOnly = TRUE` parameter below ensures that we don't get
+all the other preceding arguments that R gets invoked with.
+
+We can now test it out.
+
+```{bash, error = TRUE}
+./testRscript3.R
+```
+
+```{bash}
+./testRscript3.R 123 3
+```
+
+```{bash}
+./testRscript3.R 123 5
+```
+
+## 27.3.4. Session Info
+
+```{r}
+sessionInfo()
+```

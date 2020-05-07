@@ -1,0 +1,333 @@
+---
+title: "4.2. Data Pipelines"
+output:
+     slidy_presentation
+---
+
+```{r, echo = FALSE, results = 'hide', message = FALSE}
+## Install a package if not already installed
+installIfNeeded <- function(packages, ...) {
+    toInstall <- packages[!(packages %in% installed.packages()[, 1])]
+    if (length(toInstall) > 0) {
+        install.packages(toInstall, repos = "https://cloud.r-project.org")
+    }
+}
+
+## Ensure packages exist and activate them
+needPackages <- function(packages) {
+    installIfNeeded(packages)
+    for (x in packages) {
+        library(x, character.only = TRUE)
+    }
+}
+needPackages(c("tidyverse", "survminer"))
+```
+
+As we remarked earlier, everything that happens in R happens via
+functions. For the example in 4.1, the equivalent function calls are:
+
+```{r}
+mtu <- readRDS("mtu2.RDS")
+
+dplyrResult <- dplyr::summarize(
+    .data = dplyr::group_by(
+        .data = mtu,
+        Date = base::as.Date(DateAndTime)
+    ),
+    Precipitation = base::mean(base::range(Precipitation))
+)
+?.data
+
+dplyrResult <- summarize(
+  .data = group_by(
+    .data = mtu, Date1 = base::as.Date(DateAndTime)),
+  Precipitation = mean(Precipitation)
+)
+```
+where we have been explicit about the functions and the packages. (The
+`::` notation is a way of explicitly specifying a function in a
+particular R package.)
+
+However, this combining, while efficient, reversed the order of steps
+in the formulation of the code: to _group first and summarize after_,
+the function invocation has reflects _summarize what has been
+grouped_, simply because that is how the actual operation takes place.
+
+When the number of steps are more than two, you can see that this can
+quickly make for code that is hard to read and maintain.
+
+Why should the sequence of operations not reflect the actual thought
+process making things more transparent?
+
+This is where pipes come in. Pipes allow for a natural expression of
+sequential operations, in the order that they should be performed,
+passing the output of one process as input to another, maintaining
+_verisimilitude_ with the actual sequence of operations.
+
+Many data processing tasks fit a pipe pattern naturally.
+
+## 4.2.1. What are pipes?
+
+A fundamental strength of the Unix operating system was its support
+for pipes. The idea is that very efficient tools could be chained
+together in a pipeline to do very useful work.  For example, the
+following is a Unix command that takes as input the first 10 rows of a
+CSV file, selects the first column, performs a sort and then prints
+out the unique occurences of strings in the second column.
+
+```
+bash $> head data.csv | cut -d',' -f 2 | sort | uniq
+43
+51
+52
+54
+55
+61
+62
+69
+age
+```
+
+## 4.2.2. Enter `magrittr`
+
+The package `magrittr` is designed for creating pipelines in R.
+
+The key construct is the infix operator `%>%` which means pipe the
+output of one operation into the next.
+
+For example, the grouping and summarizing example could be rewritten
+using `magrittr` as follows.
+
+```{r}
+library(magrittr)
+library(dplyr)
+dplyrResult <- mtu %>%
+    dplyr::group_by(Date = base::as.Date(DateAndTime)) %>%
+    dplyr::summarize(Precipitation = base::mean(base::range(Precipitation)))
+
+
+dplyrResult <- iris %>%
+    dplyr::group_by(Type = Species)  %T>%
+    dplyr::summarize(Width_Variance = mean(range(Sepal.Width))) %T>%
+    dplyr::summarize(Length_Variance = mean(range(Sepal.Length))) 
+dplyrResult
+```
+
+
+
+That's it.
+
+Compare this to the vanilla R approach, or even the direct `dplyr`
+approach. Clearly the combination of `dplyr` together with the piping
+syntax is cleaner and attractive and leads to code that is transparent
+and easy to understand. In the long run, such code becomes easy to
+maintain by not just you, but anyone on a team.
+
+___
+
+	Another way to write this pipe assignment is as follows:
+
+```{r, eval = FALSE}
+mtu %>%
+    dplyr::group_by(Date = base::as.Date(DateAndTime)) %>%
+    dplyr::summarize(Precipitation = base::mean(base::range(Precipitation))) ->
+    dplyrResult
+```
+because R allows `x <- 5` or `5 -> x` for assignment.
+
+
+## 4.2.3. Details
+
+How did the piping actually work?
+
+The `%>%` operator essentially transforms expressions of the form `x
+%>% f` to a function call `f(x)` where `f` is a function.
+
+Recall the definition of infix functions from previous class (and
+homework). You might think that all `%>%` is doing is
+
+```{r}
+`%>%` <- function(x, f) f(x)
+```
+
+(We use backticks to ensure that we are not referring to strings!)
+
+Partly true, except that it would not be sufficient for widespread
+use. The above definition will work for a few things, but will fail
+for important syntactical constructs in R.
+
+```{r}
+1:10 %>% mean ## will work
+```
+but our examples on reading data etc., will fail as shown below.
+
+```{r, error = TRUE}
+dplyrResult <- mtu %>%
+    dplyr::group_by(Date = base::as.Date(DateAndTime)) %>%
+    dplyr::summarize(Precipitation = base::mean(base::range(Precipitation)))
+```
+
+So it is much more than that, which you can see by examining its
+definition.
+
+```{r}
+rm(`%>%`)  ## blow away our simplistic definition for sanity
+```
+
+Anonymous functions/expressions can also be used.
+
+```{r}
+
+1:10 %>% (function(x) x %% 2 == 0)
+```
+is equivalent to:
+
+```{r}
+local({
+    f <- function(x) x %% 2 == 0
+    f(1:10)
+})
+```
+
+Or, you can use an expression:
+
+```{r}
+1:10 %>%
+    {
+        . %% 2 == 0
+    }
+```
+
+## 4.2.3. Closer look at another example
+
+Consider the following survival data for which we will generate a plot
+and a summary. The data assumes a last follow-up date of December 31,
+2009 say and event dates are recorded if they appeared, otherwise no
+event was seen until the follow-up date.
+
+```{r}
+readr::read_csv("data.csv")
+```
+
+___
+
+This kind of _time to event_ data is prevalent in medicine and
+finance and R has excellent facilities to handle such data. For
+example, to produce a survival plot and summary, the following
+pipeline would suffice.
+
+
+```{r}
+library(survival)
+lfuDate <- as.Date("12/31/2009", format = "%m/%d/%Y") ## last follow up date
+## 1.
+"data.csv" %>%
+    readr::read_csv(
+               col_types =
+                   readr::cols(
+                              txDate = readr::col_date( format = "%m/%d/%Y"),
+                              eventDate = readr::col_date( format = "%m/%d/%Y"))
+           ) %>%
+    ## 2.
+    dplyr::mutate(event = ifelse(!is.na(eventDate), 1, 0),
+                  time = ifelse(!is.na(eventDate),
+                                eventDate - txDate, lfuDate - txDate)) %>%
+    ## 3. and 4
+    survival::survfit(Surv(time, event) ~ 1, data = .) %T>%
+    ## 5.
+    plot(conf.int = TRUE) %>%
+    ## 6.
+    summary %>%
+    ## 7.
+    print
+```
+
+Here are the details.
+
+1. Start from the name of the CSV file. Pipe that name to
+   `readr::read_csv` to read a CSV file with specified date formats
+   for variables `txDate` and `eventDate` since that is how they
+   appear in the csv file
+
+2. Create two new variables: `event`, indicating whether you saw
+   an event or not, `time` indicating the time interval between the
+   transplant and event date if an event was recorded, or the time
+   interval between the transplant and last follow-up date
+
+3. Fit a survival model. Since `survfit` expects the first argument to
+   be the formula rather than the data set, we use the placeholder `.`
+   to specify where the output of the previous step needs to be
+   used. (In this particular case, another way to achieve the same
+   effect finesse this would have been to use named arguments
+   (`formula = Surv(time, event) ~ 1`) which would make data argument
+   go in the right place since `data` happens to be the second
+   argument of `survfit.formula`.)
+
+4. The result of the call to `survfit` is to be plotted and
+   summarized. So the `survfit` object is the argument to both the
+   plotting and summary functions. The `%T>%` operator works like
+   `%>%` but it returns the left hand size of the piping operation,
+   that is, the input. So this ensures that both `plot` and
+   `summary` get the `survfit` object as input in 5 and 6 noted in the
+   code.  This construct is used when you are interested in the _side
+   effect_ of calling a function rather than its output
+
+7. When a function expects one argument, you can omit the empty
+   parenthesis, for example, `print`.
+
+
+## 4.2.4. Robustness
+
+Functions in the `magrittr` package will not confuse `.` with a
+placeholder. For example, consider this from the `magrittr` vignette:
+
+```{r}
+car_data <-
+  mtcars %>%
+  subset(hp > 100) %>%
+  aggregate(. ~ cyl, data = ., FUN = . %>% mean %>% round(2)) %>%
+  transform(kpl = mpg %>% multiply_by(0.4251)) %>%
+  print
+```
+
+In the call to `aggregate`, the `.` is used as a placeholder for
+defining a function. Specifically, a pipeline with a dot (`.`) as LHS
+will create a unary function.  If you did not use the `magrittr`
+feature, you'd have to do something like:
+
+```{r}
+aggregate(. ~ cyl,
+          data = mtcars,
+          FUN = function(x) round(mean(x), 2),
+          subset = hp > 100
+          )
+```
+which takes a bit more effort to parse.
+
+### Carried away?
+
+```{r}
+set.seed(123)
+1:3 %>%
+    lapply(., FUN = . %>% rnorm)
+
+1:3 %>%
+    lapply(., FUN = . %>% rnorm(10)) %>%
+    sapply(., FUN = mean)
+```
+
+I don't believe these are any great improvements.
+
+## 4.2.5 References
+
+
+- R for Data Science has a neat intro to pipes in [Chapter 18](https://r4ds.had.co.nz/pipes.html)
+
+- See also the vignettes of the package [`magrittr`](https://cran.r-project.org/package=magrittr)
+
+
+## Session Info
+```{r}
+sessionInfo()
+```
+

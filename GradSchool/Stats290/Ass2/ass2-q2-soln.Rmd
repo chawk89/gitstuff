@@ -1,0 +1,179 @@
+---
+title: 'Stat 290: Assignment 2: Q2'
+output:
+  html_document:
+    df_print: paged
+---
+
+## Q2. Data Cleaning [10 pts]
+
+__2.__ NYC Department of Education provides testing for gifted and
+talented students. Parents are surveyed on the performance of kids on
+the gifted and talented exam as well as additional items such as
+school choice priority. The data is all over the place, where some
+enter percentiles where point scores are asked and no strict standard
+is followed. Also birth quarter affects percentiles. The data is
+provided in the `GT_results_2017-18.csv` file included here. This
+exercise leads you through the process of cleaning up some of the
+columns and renaming them. 
+
+```{r}
+library(tidyverse)
+column_names <- c("id", "time_stamp", "grade_level", "district",
+                  "birth_month", "olsat_verbal_score", "olsat_verbal_pct",
+                  "nnat_verbal_score", "nnat_verbal_pct", "overall_score",
+                  "school_prefs", "school_assigned", "will_enroll")
+```
+
+__2a.__ Read the data file into a `tibble`, add an `id` column (row
+numbers will do), ensure that variable names are exactly
+`column_names` and name the result `nyc_q2a`.
+
+```{r q_2a, eval = TRUE}
+read_csv(file = "G&T_responses_2017-2018.csv") %>%
+    select(1:12) %>%
+    mutate(id = row_number()) %>%
+    select(id, everything()) ->
+    nyc_q2a
+names(nyc_q2a) <- column_names
+```
+
+__2b.__ Using `nyc_q2a`, constructed a grouped summary of district
+preference counts within each grade level. Assign the summary result
+to `nyc_q2b`.
+
+```{r q_2b, eval = TRUE}
+nyc_q2a %>%
+    group_by(grade_level, district) %>%
+    summarize(count = n()) ->
+    nyc_q2b
+```
+
+__2c.__ Using `nyc_q2a`, clean the `olsat_verbal_score` column by
+setting any score greater than 30 to be a missing value. Also using
+`stringr::str_replace`, replace any _beginning_ `~` in the
+`olsat_verbal_pct` with an empty string. Name the cleaned data as
+`nyc_q2b`. Hint: `ifelse` is useful.
+
+```{r q2c, eval = TRUE}
+nyc_q2a %>%
+    mutate(olsat_verbal_score = ifelse(olsat_verbal_score > 30, NA, olsat_verbal_score),
+           olsat_verbal_pct = str_replace(olsat_verbal_pct, pattern = "^~", replacement = "")) ->
+    nyc_q2c
+```
+
+__2d.__ Using `stringr::str_match`, create a modified tibble `nyc_q2d`
+from `nyc_q2c` so that `olsat_verbal_score` and `nnat_verbal_score`
+values with denominators 30 and 48 respectively, are replaced with
+just the numerator, i.e. `24/30` becomes `24`.
+
+Hint: See help on `stringr::str_match` and run examples using
+`example(str_match)`. Useful functions: `is.na`,
+`as.numeric`. Warnings from numeric coercion are expected because of
+other phrases in the columns.
+
+__Note__ Your answers will be checked by using such fractions in some
+random rows to ensure correct logic, so tailoring your solution for
+this particular dataset is not advised.
+
+
+```{r q_2d, eval = TRUE}
+nyc_q2c %>%
+    mutate(olsat_numerator = stringr::str_match(olsat_verbal_score,
+                                                pattern = "([0-9]+)/30$")[, 2],
+           olsat_verbal_score = ifelse(is.na(olsat_numerator), olsat_verbal_score, olsat_numerator),
+           nnat_numerator = stringr::str_match(nnat_verbal_score,
+                                               pattern = "([0-9]+)/48$")[, 2],
+           nnat_verbal_score = ifelse(is.na(nnat_numerator), nnat_verbal_score, nnat_numerator),
+           olsat_verbal_score = as.numeric(olsat_verbal_score),
+           nnat_verbal_score = as.numeric(nnat_verbal_score)) %>%
+    select(-olsat_numerator, -nnat_numerator) ->
+    nyc_q2d
+
+```
+
+__2e.__ Complete the following partially written function to clean up
+the unstructured data in `nycq2d$school_prefs` and use it to produce a
+list named `school_prefs` of school preferences for each student. Most
+of the cleanup is already there and your addition to the end of the
+function (position clearly noted) will ensure that
+- `school_prefs` will be a list
+- each element of `school_prefs` will be a character vector
+- any school preference such as `111`, `21`, of all digits is
+  translated to `ps111`, `ps21`
+- any entry `ps300` is translated to `ps300q`
+
+
+```{r q_2e, eval = TRUE}
+clean_school_prefs <- function(school_prefs) {
+    school_prefs %>%
+        ## Convert to lower case
+        stringr::str_to_lower() %>%
+        ## Use uniform separator throughout : comma
+        stringr::str_replace_all( pattern = "/", replacement = ",") %>%
+        ## Make sure that every comma has a space following, will help downstream
+        str_replace_all( pattern = ",", replacement = ", ") %>%
+        ## Replace "brooklyn school of inquiry" -> "bsi"
+        str_replace( pattern = "brooklyn school of inquiry", replacement = "bsi") %>%
+        ## Replace strings beginning with "all cw" or "any city..." -> "any"
+        str_replace( pattern = "(^all cw)|(^any city.*)", replacement = "any") %>%
+        ## Replace "likely..." -> "zoned"
+        str_replace( pattern = "(^likely.*)", replacement = "zoned") %>%
+        ## Replace every "p.s." -> "ps", "ps" -> "ps"
+        str_replace_all( pattern = "(p\\.s\\.\\s*|ps\\s+)", replacement = "ps") %>%
+        ## Replace "30th av school" or "q300" -> "ps300q"
+        str_replace( pattern = "30th av|q300", replacement = "ps300q") %>%
+        ## Replace "lower lab" or "lower   lab" -> "ll"
+        str_replace( pattern = "lower\\s?lab", replacement = "ll") %>%
+        ## Replace "Nest+m", "nestM", "nest+t" ->  "nest" with or without spaces in between
+        str_replace( pattern = "nest(\\s*)\\+?(\\s*)([tm])", replacement = "nest") %>%
+        ## Replace "tag young" -> "tag"
+        str_replace( pattern = "tag young", replacement = "tag") %>%
+        ## Get rid of things in parenthesis
+        str_replace( pattern = "\\(\\w+\\)", replacement = "") %>%
+        ## Continue the pipe to split each string into a list of
+        ## words to work on; becomes a list henceforth!
+        ## YOUR ADDITIONS HERE (about three or four lines should suffice)
+        str_split( pattern = boundary("word")) %>%
+        lapply(str_replace, pattern = "(^[0-9]+)", replacement = "ps\\1") %>%
+        lapply(str_replace, pattern = "^ps300$", replacement = "ps300q")
+}
+## Use the function clean_school_prefs to produce school_prefs
+school_prefs <- clean_school_prefs(nyc_q2d$school_prefs)
+```
+
+__2f.__ Using `school_prefs` produce a table of the top 5 schools in
+order of preference frequency and name it `top_5_pref` and print it. 
+
+```{r q_2f, eval = TRUE}
+## YOUR ANSWER HERE
+top5_pref <- sort(table(unlist(school_prefs)), decreasing = TRUE)[1:5]
+print(top5_pref)
+```
+
+__2g.__ Create a modified version of `nyc_q2f` using `nyc_q2d` and
+`school_prefs` by replacing removing column `school_prefs` and adding
+three columns `school_pref1`, `school_pref2`, `school_pref3`,
+reflecting the first three school preferences for each student each
+student with missing values as appropriate.
+
+```{r q_2g, eval = TRUE}
+## YOUR ANSWER HERE
+first_three <- sapply(school_prefs, function(x) x[1:3])
+pref <- tibble(id = nyc_q2d$id,
+               school_pref1 = first_three[1, ],
+               school_pref2 = first_three[2, ],
+               school_pref3 = first_three[3, ])
+nyc_q2d %>%
+    left_join(pref, by = "id") %>%
+    select(-school_prefs) ->
+    nyc_q2g
+```
+
+## Session Info
+
+Leave everything below as is.
+
+```{r}
+sessionInfo()
+```

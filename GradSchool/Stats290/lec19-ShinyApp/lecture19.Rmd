@@ -1,0 +1,603 @@
+---
+title: 19. Shiny Lab 2
+output:
+     slidy_presentation
+---
+
+Last time, we introduced the [Shiny](http://shiny.rstudio.com) web
+programming framework for R developed by Joe Cheng at RStudio.
+
+The following material is mostly from a Shiny Developer workshop
+presented by RStudio.
+
+> [Recap](#recap)
+
+> [Side Effects](#side-effect)
+
+> [Observers](#observers)
+
+> [Isolating Reactivity](#isolate)
+
+> [Dynamic Plot Exercise](#dynamic)
+
+> [Summary](#summary)
+
+
+<a id="recap"></a>
+
+## 19.1. Recap
+
+In lecture 18:
+
+- We saw how to create shiny apps by providing the `ui` and `server`
+  functions as parameters to the `shinyApp` function call. (RStudio
+  helps by creating a simple app for starters)
+
+- We discussed _reactivity_ using some exercises: how to ensure a plot
+  gets redrawn, or a summary recalculated when a user changes some
+  parameter value or a setting in a widget like a slider (`Ex1.R`). We
+  noted the difference between telling shiny _to do something_ versus
+  _telling shiny how to do something_
+
+- We saw how we could be efficient in recalculating the values by
+  factoring code into reactive expressions using the function
+  `reactive` (`Ex2.R`, `Ex3.R`). This technique allows us to compute
+  changed quantities only once.  
+  
+  
+  __Important Note:__ Reactive expressions are called like functions,
+    e.g. `foo()`!
+
+## 19.2. Finish up Actions
+
+- In `Ex4.R` we saw how to take some action when a button is pressed
+  using `observeEvent`. For example, saving a data set.
+
+- In `Ex5.R` we exploited `reactiveValues` to create our own data
+  structure that other reactive functions and expressions could
+  use. The idea is that shared data that is the result of
+  events can be captured in such a data structure so that other
+  reactive calculations can proceed.  This helps you organize code
+  better. 
+
+<a id="side-effect"></a>
+
+## 19.3. Side Effects
+
+When functions are executed, you want to
+
+- Compute and return a value: this is the essence of functional
+  programming with nothing else being changed in the programming
+  environment
+
+- Some action to be taken which may mean that there is some
+  other effect that happens that changes the programming
+  environment.
+
+The latter are _side effects_. We've remarked before that side-effects
+make it harder to prove the correctness of programs and also reason
+about them. However, you cannot avoid them because after all you do
+want your program to do something useful and that almost always
+involves some tangible interaction to take place, especially in the
+shiny world!
+
+The general way to tell whether a piece of code has side-effects or
+not is to ask yourself if it changes the programming environment in
+some way.
+
+___
+
+Things that have a side-effect.
+
+```{r, eval = FALSE}
+m <- 1:10
+x <<- 10
+write.csv(cars, file = "cars.csv")
+library("ggplot2")
+names(x) <- "foo"
+e <- new.env(); e$x <- 10  ## Any referential object
+```
+
+_Inside a function though_, the following generally are not
+side-effects.
+
+```{r, eval = FALSE}
+m <- 1:10
+lm(speed ~ dist, data = cars)
+x + y
+.Random.seed
+```
+
+___
+
+Technically speaking, it is hard to tell if an R expression or
+function call has a side-effect because lots of things happen behind
+the scenes.
+
+__NOTE__ In the markdown output, `.Last.value` returns something
+different from what it would in a normal R session because the
+markdown is being rendered by a different R process.  So you should
+try these out in an R session.
+
+For example:
+
+```{r}
+1 + 2
+print(.Last.value)
+3 + 4
+print(.Last.value)
+runif(3)
+print(.Last.value)
+```
+
+The last call to `runif` is actually pretty interesting. If you
+have not already set a random number seed, a new variable called
+`.Random.seed` is created based on some system specific info (time, os
+entropy generator, etc.). This is in addition to setting the
+`.Last.value`. 
+
+So we need a working definition of side-effects. For us it is:
+
+- If executing the function or expression changes the R programming
+environment (_a bit_), it has side effects. We will ignore things like
+`.Last.value`, but not things like `.Random.seed` since the latter can
+have huge downstream effects in statistical computation.
+
+- If the execution only changes function local variables etc., it is
+  not a side effect.
+
+
+## 19.3.1. Side Effect Quiz
+
+Using our working definition, state whether executing the following
+functions have side effects or not: Yes or No.
+
+1.
+```{r, eval = FALSE}
+function(x, y, z) x + y
+```
+
+2.
+```{r, eval = FALSE}
+function(x, y, z) { x <- x + y; x * y }
+```
+
+3.
+```{r, eval = FALSE}
+function(x) { .GlobalEnv$foo <-  x; x }
+```
+
+4.
+```{r, eval = FALSE}
+function(x) { options(digits = x); date() }
+```
+
+5. Assume `df = cars` in this example.
+
+```{r, eval = FALSE}
+function(df) { df$speed <- factor(df$speed + 10); df }
+```
+
+6.
+```{r, eval = FALSE}
+function() { readLines(textConnection("Row 1\nRow 2")) }
+```
+
+7.
+```{r, eval = FALSE}
+function(df) { hist(df$values) }
+```
+
+8.
+```{r, eval = FALSE}
+function(rngSeed, n) {
+    ## Get a handle on old RNG state
+    oldRngState <- if (exists(".Random.seed", envir = .GlobalEnv)) {
+        get(x = ".Random.seed", envir = .GlobalEnv)
+    } else {
+        NULL
+    }
+
+    ## set our seed
+    set.seed(seed = rngSeed, normal.kind = NULL)
+    x <- runif(n)
+
+    if (is.null(oldRngState)) {
+        rm(".Random.seed", envir = .GlobalEnv)
+    } else {
+        assign(x = ".Random.seed", value = oldRngState, envir = .GlobalEnv)
+    }
+    x
+```
+
+## 19.3.2. Quiz Answers
+
+1. No because, this is a pure function that returns a value
+
+```{r, eval = FALSE}
+function(x, y, z) x + y
+```
+
+2. No, because even though x is modified internally, a local copy of x
+is created and nothing really happens outside the function.
+
+```{r, eval = FALSE}
+function(x, y, z) { x <- x + y; x * y }
+```
+
+3. Yes, because modifies a variable in the global environment.
+```{r, eval = FALSE}
+function(x) { .GlobalEnv$foo <-  x; x }
+```
+
+4. Yes, because it affects all output after a call. The function
+`options` sets the number of digits to be printed in this case.
+
+```{r, eval = FALSE}
+function(x) { options(digits = x); date() }
+```
+For example, try `example(lm)` before and after a call to this
+function. (BTW, the `digits` is only a _suggestion_!)
+
+```{r}
+## Default is 7
+getOption("digits")
+lm(formula = speed ~ dist, data = cars)
+## Changes default to 2
+options(digits = 2)
+lm(formula = speed ~ dist, data = cars)
+```
+
+5. No, because the variable `df` is silently copied on modify. So what
+you get is a new copy of `cars` suitably modified.
+
+```{r, eval = FALSE}
+function(df) { df$speed <- factor(df$speed + 10); df }
+```
+
+6. No, because of our definition: we ignore changes to `.Last.value`.
+
+```{r, eval = FALSE}
+function() { readLines(textConnection("Row 1\nRow 2")) }
+```
+
+7. Yes, because it modifies the plotting device.
+
+```{r, eval = FALSE}
+function(df) { hist(df$values) }
+```
+
+8. No, for all practical purposes, because it is careful to set things
+   back as they were before the call.
+
+```{r, eval = FALSE}
+function(rngSeed, n) {
+    oldRngState <- if (exists(".Random.seed", envir = .GlobalEnv)) {
+        get(x = ".Random.seed", envir=.GlobalEnv)
+    } else {
+        NULL
+    }
+    ## set our seed
+    set.seed(seed = rngSeed, normal.kind = NULL)
+    x <- runif(n)
+    ## Restore rng state
+    if (is.null(oldRngState)) {
+        rm(".Random.seed", envir = .GlobalEnv)
+    } else {
+        assign(x = ".Random.seed", value = oldRngState, envir = .GlobalEnv)
+    }
+    x
+```
+
+<a id="observers"></a>
+
+## 19.4. Observers
+
+In shiny, one uses _reactive expressions_ for calculations and
+_observers_ to set reactive variables.
+
+What are _observers_ actually? Observers are blocks of code that
+perform actions. They're executed in response to changing reactive
+values and expressions. They don't return a value.
+
+_In other words, observers are used for the side-effects._ 
+
+For example, to set values of reactive variables.
+
+In shiny, they come in two flavors:
+
+- Explicit as in `observeEvent` which you already
+  saw in `Ex5.R`. These depend on specific reactive value or
+  expression. They ignore all others. Ideal for event handlers,
+  i.e. you want something done _only_ in response to an event. Format:
+```{r, eval = FALSE}
+observeEvent(input$nrows, {
+    ## Observe a change to input$rows and set the appropriate data
+    ## to observations from a normal or uniform etc.
+    ...
+})
+```
+
+- Implicit as in `observe`. These depend on all reactive values used
+  in the expression. Any time one of them changes the code executes,
+  enabling the side-effect desired.
+
+Let us examine the latter.
+
+```{r, eval = FALSE}
+observe({
+    cat("X or Y has changed; New values are ", input$x, input$y, "\n")
+})
+```
+will execute every time the value of either `input$x` or `input$y`
+changes.
+
+
+## 19.4.1. Exercise 6
+
+In `Ex6.R` modify the code to use `observe` rather than
+`observeEvent`.
+
+
+## 19.4.2. Details
+
+It makes sense to use `observeEvent` in `Ex5` because pressing a
+button is naturally an event. Furthermore, using `observe` makes the
+code look a bit hacky merely to force the dependency on some
+variables. (However, I should add that this kind of forcing a
+dependency is common in shiny code---I've seen lots of it used without
+thought!)
+
+To summarize:
+
+- An observer is like a reactive expression in that it can read
+reactive values and call reactive expressions, and will automatically
+re-execute when those dependencies change. Used mainly for
+side-effects.
+
+- Reactive expressions use lazy evaluation; that is, when their
+dependencies change, they re-execute, but only if needed!  Observers,
+on the other hand, use eager evaluation; as soon as their dependencies
+change, they schedule themselves to re-execute.
+
+- You should never count on the order of how things will actually
+execute! The order is unspecified.
+
+<a id="isolate"></a>
+
+## 19.5. Isolate
+
+Consider for example an application that uses a slider value to
+perform a very intensive calculation in a function `f`. If `f` uses
+the reactive variables from `input` say, then as the user is dragging
+the slider, the function is going to be recomputing the results even
+though some of the results will be thrown away.
+
+A better strategy might be to force the user to press a button to
+start the intensive calculation in `f`. This is also the case when,
+for example, you have a number of parameters to gather before doing a
+calculation: better to have them all chosen and then do the
+calculation, rather than jumping at every changed parameter.
+
+This is where `isolate` comes in. Let us take a simple example in the
+file `isolate.R`.
+
+```{r, eval = FALSE}
+library(shiny)
+
+ui <- pageWithSidebar(
+    headerPanel("Click the button"),
+    sidebarPanel(
+        sliderInput("obs", "Number of observations:",
+                    min = 0, max = 1000, value = 500),
+        actionButton("goButton", "Go!")
+    ),
+    mainPanel(
+        plotOutput("distPlot")
+    )
+)
+
+server <- function(input, output) {
+    output$distPlot <- renderPlot({
+        ## Take a dependency on input$goButton
+        input$goButton
+
+        ## Use isolate() to avoid dependency on input$obs
+        dist <- isolate(rnorm(input$obs))
+        hist(dist, main = sprintf("Hist of %d normals", length(dist)))
+    })
+}
+shinyApp(ui, server)
+```
+
+Note how the `dist` expression _isolates_ the dependency on
+`input$obs`. If this were not the case, every time `input$nobs`
+changed, `dist` would be recalculated.
+
+Thus `isolate` allows you to selectively control reactivity.
+
+## 19.5.1. Exercise 7
+
+Use `isolate` to rewrite the code in `Ex7.R` so that the plot is only
+plotted when the `Plot` button is pressed.
+
+## 19.5.2. Comment
+
+This idea of having to isolate some reactive values to avoid expensive
+calculations is so common that you have a construct called
+`eventReactive` for convenience.  Take a look at `Ex7a.R`.
+
+```{r, eval = FALSE}
+server <- function(input, output){
+
+    ## Make both data and title eventReactive
+    data <- eventReactive(input$go, {
+        rnorm(input$normCount, input$normMean, input$normSd)
+    })
+
+    title <- eventReactive(input$go, {
+        sprintf("Hist of %d N(%.2f, %.2f) normals",
+                input$normCount, input$normMean, input$normSd)
+    })
+
+    output$plot <- renderPlot({
+        d <- data()
+        if (!is.null(d))
+            hist(data(), main = title())
+    })
+}
+```
+
+<a id="dynamic"></a>
+
+## 19.6. Dynamic Plot Exercise
+
+In this exercise, we are going to build an app that does the
+following.
+
+1. Let the user click on any point on a plot and add that point to the
+   dataset being plotted
+
+2. Update the regression fit so that the new updated regression line
+   is also plotted.
+
+Code is in `Ex8.R`. Note the use of a new parameter for `plotOutput`.
+
+```{r eval = FALSE}
+ui <- fillPage(
+    ## New input variable "click" is available for mouse clicks!
+    plotOutput("plot", click = "click", height = "100%")
+)
+server <- function(input, output, session) {
+    ## userPoint below is a reactive expression that will be recalculated
+    ## every time input$click changes
+    userPoint <- reactive({
+        ## input$click will be either NULL or list(x=num, y=num)
+        click <- input$click
+        if (is.null(click)) {
+            ## The user didn't click on the plot (or the previous
+            ## click was cleared by the plot being re-rendered)
+            return(NULL)
+        }
+        data.frame(speed = click$x, dist = click$y)
+    })
+  output$plot <- renderPlot({
+    ## Before plotting, combine the original dataset with
+      ## the user data. (rbind ignores NULL args.)
+      df <- rbind(cars, userPoint())
+      plot(df, pch = 19)
+      
+      model <- lm(dist ~ speed, df)
+      abline(model)
+  })
+}
+```
+
+___
+
+If you run this app and click on the plot, a data point appears where
+you clicked. However it only stays for a moment before it disappears.
+
+This happens because each time the plot is re-rendered, the value of
+`input$click` is reset to `NULL`, and thus `userPoint()` becomes
+`NULL` as well.
+
+- __Problem 1.__ Can you get a single user-added data point to stay?
+
+- __Problem 2.__ Can you include not just the single most recent
+click, but _all_ clicks made by the user?
+
+__Hint:__ You will need to replace `reactive()` with a combo of
+`reactiveValues()` and `observeEvent()`.
+
+<a id="summary"></a>
+
+## 19.11. Summary
+
+Reactive expressions are expressions that can read reactive values
+and call other reactive expressions.
+
+Whenever a reactive value changes, any reactive expressions that
+depended on it are marked as _invalidated/dirty_ and will
+automatically re-execute if necessary. If a reactive expression is
+marked as dirty, any other reactive expressions that recently called
+it are also marked as dirty.
+
+In this way, invalidations ripple through the expressions that depend
+on each other.
+
+Shiny has a number of other functions for:
+
+- UI elements
+
+- Validation of inputs, including requiring certain values to be
+  present before calculation
+- Modularization (with shiny name spaces!) These are called shiny
+  modules
+- Tools for creating dashboard (shiny dashboards) 
+- Interfaces to newer Javascript libraries etc. 
+
+The shiny website has some really nice graphics indicating reactivity
+and many other details on the above.
+
+## 19.12. UI Resources
+
+On purpose, I have not gone into detail with developing fancy
+UIs. This a topic for you to explore. But I will mention just a few
+things.
+
+- The package `htmltools` provides you html tags for most common
+  markup items.
+
+- Sometimes you need to create elements with your own styling. This
+  means you want to use style sheets. The best way is to build your
+  own stylesheet and specify the CSS file using
+  `htmltools::includeCSS`.  See
+  [Shiny Style with CSS](https://shiny.rstudio.com/articles/css.html).
+
+- You can also include Javscript using the `tags` function in
+  `htmltools`. For example
+```
+tags$head(includeScript("google-analytics.js"))
+tags$head(HTML("<script type='text/javascript'></script>"))
+```
+
+___
+
+## 19.13. Resources
+
+- [Shiny tutorial](http://shiny.rstudio.com/tutorial)
+
+- [Reactivity overview](http://shiny.rstudio.com/articles/reactivity-overview.html)
+and [How to understand reactivity](http://shiny.rstudio.com/articles/understanding-reactivity.html).
+
+- [Customize your UI with html](http://shiny.rstudio.com/articles/html-tags.html)
+
+- [Shiny Layout Guide](http://shiny.rstudio.com/articles/layout-guide.html)
+
+- [Shiny Gallery](https://shiny.rstudio.com/gallery/)
+
+- [Shiny Dashboards](https://rstudio.github.io/shinydashboard/)
+
+- [Shiny Modules](https://shiny.rstudio.com/articles/modules.html)
+
+___
+
+## 19.14. Session Info
+
+```{r}
+sessionInfo()
+```
+
+
+
+
+
+
+
+
+
+
+
+
+

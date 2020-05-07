@@ -1,0 +1,211 @@
+---
+title: "2.2. Vectors in R"
+output:
+     slidy_presentation
+---
+
+Very useful functions for looking at vectors (among others).
+
+```{r}
+x <- 1:10
+str(x)
+head(x)
+tail(x)
+```
+
+Note all of the functions `str`, `head` and `tail` have further
+arguments. Variant of `str` is `ls.str`:  useful for listing things you
+have in your session. But Rstudio also shows this for you in your
+_Global Environment_ panel.
+
+## 2.2.1. Element access
+
+Indexing begins at 1. Access elements via
+`[` and `[[`. The latter simplifies, but the former does not.
+
+```{r, error = TRUE}
+x[5:10] ## slice
+x[[5:10]] ## Error, [[ accesses single element
+x[[5]] ## ok
+```
+
+Defensive programming requires you to be aware of the following fact:
+
+```{r, error = TRUE}
+x[100] # Returns NA
+x[100:105] # length 6! 
+x[[100]]
+```
+
+Even when you exceed the integer index, `[` indexing resulted in a
+vector of length > 0, albeit an `NA` value. So even though it
+requires extra typing, I would recommend using `[[` indexing in any
+code where you expect exactly one element.
+
+## 2.2.2. Generic vectors, Lists
+
+Lists are very flexible and can contain arbitrary objects. Access is
+as above, but note how `[[` behaves for recursive objects like generic
+vectors (lists).
+
+```{r}
+y <- list(a = 1, b = 2, c = c("foo", "bar"))
+y[1:2] ## multiple elements
+y[2] ## Single element
+y[3]
+y[[3]]
+y[[c(3, 1)]] ## result is still a single element y[[3]][[1]]
+```
+
+I don't recommend the last.
+
+## 2.2.3. Naming
+
+Naming is a very useful facility in R and can make code very
+readable. Exploit it.
+
+```{r}
+names(y)
+y["b"] ## indexing by name
+names(x) <- LETTERS[seq_along(x)]
+attributes(x) ## names are attributes
+x[LETTERS[3:5]] ## access by names
+## Readable and maintainable code
+fivenum <- fivenum(rnorm(100))
+## names can be set
+names(fivenum) <- c("min", "q1", "median", "q3", "max")
+fivenum
+## or
+fivenum <- setNames(fivenum, c("min", "q1", "median", "q3", "max"))
+fivenum["median"]
+```
+
+## 2.2.4. Dollar (`$`) indexing
+
+Widely used in R. Use full names where possible and avoid partial
+matching that will result in unreliable code.
+
+```{r}
+y$b
+y
+names(y) <- c("aa", "bb", "cc")
+y$b
+y[["b", exact = FALSE]] ## is equivalent to y$b
+y[["b", exact = TRUE]]
+```
+
+## 2.2.5. Other forms of indexing, subsetting
+
+R allows for negative and logical indexing. In many cases, items can
+be recycled. (I personally don't like recycling and so I take extra
+programmatic precaution to ensure things behave as I want.)
+
+```{r, error = TRUE}
+x[-(1:5)]
+x[c(-1, 2, 3)] ## error, mixed sign for indices not permitted
+length(x)
+x[2.5]  ## 2.5 coerced to 2
+```
+
+Now consider:
+
+```{r}
+x["Z"] ## out of bounds indexing with name!
+```
+(Again, when you have out-of-bounds indexing using a character vector, you
+actually get a vector of the appropriate length!)
+
+Negative indexing ok with `[[`, if result is one element, thereby
+preserving consistent behavior of `[[`.
+
+```{r, error = TRUE}
+w <- list("a", list("b", "c"))
+w[[-1]] ## Ok
+w <- list("a", list("b", "c"), "foobar")
+w[[-1]] ## Error
+```
+
+Logical indexing is a powerful tool since one has to often subset
+based on conditions. Note how logical indices are extended (via
+recycling) to the length of the entire vector. 
+
+```{r}
+x[seq_along(x) %% 2 != 0] ## odd index elements
+x[TRUE] ## entire vector
+x[as.integer(TRUE)] ## single element
+class(TRUE)
+x[(c(TRUE, FALSE))] ## Logical indices, if shorter, are recycled!
+x[c(TRUE, TRUE)] ## equivalent to x[TRUE]
+```
+
+Let us take a look at recycling.
+
+```{r}
+## Recycling
+z <- x[1:3] + x[1:5]
+```
+R usually warns you if this happens. However, it is possible for a
+user to turn warnings off and so things can happen silently.  So
+implicit recycling should be avoided unless correct behavior
+can be guaranteed.
+
+## 2.2.6. Indexing with NA, empty, etc.
+
+Missing values are usually used in variables where the value is not
+known, represented by `NA`. Note that `NA` is different from the string
+`"NA"`; the latter is a string like any other. It is also different
+from `NaN` which stands for _not a number_, something that can occur
+in numerical calculations.
+
+Underneath, since elements of an atomic vector must be of the same
+type, so NA is really several types of `NA` values: `NA_character_`,
+`NA_complex_`, `NA_integer_`, `NA_real_`.
+
+```{r}
+(1:10)[0] ## empty vector, *not the first element!*
+rnorm(10)[0] ## empty vector again
+x[0] # empty vector
+x[] ## entire vector
+x[c(1, NA, 2)]
+x[NA]  ## NA indexing
+x[NA_integer_]
+typeof(NA) ## that's why the result for x[NA]
+```
+
+The default type of `NA` is logical as seen above.
+
+Numeric and logical calculations with `NA` generally return `NA`. But
+some exceptions per the R language manual:
+
+> In cases where the result of the operation would be the same for all
+> possible values the NA could take, the operation may return this
+> value.
+
+```{r}
+FALSE & NA
+FALSE | NA
+TRUE | NA
+TRUE & NA
+```
+
+You can test for a missing value via `is.na`:
+
+```{r}
+is.na(1)
+is.na(NA_integer_)
+```
+
+Similarly, the test for nullity is done via `is.null`.
+
+
+Some wierdness:
+
+```{r}
+NA^NA
+NA^0
+```
+
+## Session Info
+```{r}
+sessionInfo()
+```

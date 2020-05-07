@@ -1,0 +1,357 @@
+---
+title: "8.1. Tidy Data"
+output:
+     slidy_presentation
+---
+
+```{r, echo = FALSE, results = 'hide', message = FALSE}
+## Install a package if not already installed
+installIfNeeded <- function(packages, ...) {
+    toInstall <- packages[!(packages %in% installed.packages()[, 1])]
+    if (length(toInstall) > 0) {
+        install.packages(toInstall, repos = "https://cloud.r-project.org")
+    }
+}
+
+## Ensure packages exist and activate them
+needPackages <- function(packages) {
+    installIfNeeded(packages)
+    for (x in packages) {
+        library(x, character.only = TRUE)
+    }
+}
+needPackages(c("png", "grid", "gridExtra"))
+```
+
+
+
+```{r, echo = FALSE}
+library(tidyverse)
+```
+
+Tidy data is a standard way of mapping the meaning of a dataset to
+its structure. A dataset is messy or tidy depending on how rows,
+columns and tables are matched up with observations, variables and
+types. In tidy data:
+
+- Each variable forms a column
+- Each observation forms a row
+- Each type of observational unit forms a table cell.
+
+___
+
+Tidy data makes it easy to do analyses although there are applications
+where data may be stored in preferred formats (not necessarily tidy by
+the definition above) for efficiency reasons. The reason for a lot of
+data wrangling and cleaning is really to create tidy data sets because
+measured variables become clear and the analysis, easy and
+straightforward.
+
+___
+
+Consider an example tibble.
+
+```{r}
+d <- tibble(
+    id = 1:4,
+    gender = c("M", "F", "F", "M"),
+    sbp.trt1 = c(125, 110, 100, 135),
+    dbp.trt1 = c(81, 90, 80, 90),
+    sbp.trt2 = c(120, 115, 114, 130),
+    dbp.trt2 = c(75, 91, 82, 88)
+)
+d
+```
+
+Although five variables are measured for a patient: `id`, `gender`,
+`sbp`, `dbp`, `treatment` (1 or 2), not all of these in a column by
+themselves. For example the treatment that the patient got is along
+columns. 
+
+This is not tidy data.
+
+Notice also how complicated it is to compute a simple thing such as
+the overall average of all systolic pressure measurements.
+
+- We have to find the two columns that relate to systolic pressure
+  measurements
+- We would have to sum all the values
+- We would have to divide by the number of measurements. 
+
+The natural thing we expect to do is apply a function like `mean` to a
+single column and the above doesn't fit for this data.
+
+___
+
+```{r}
+d
+```
+
+The natural format is one where have a column for the treatment
+(`trt`), a column for the type of blood pressure measurement (`sbp` or
+`dbp`) and a column for the blood pressure value (`bp`). If we have
+that format, then we can bring the power of `dplyr` and pipes
+discussed above to compute all kinds of summaries very easily. 
+
+Tidying data also makes it easy to produce complex plots as we shall
+see later. 
+
+___
+
+
+## 8.1.1. The package `tidyr`
+
+The package `tidyr` (in `tidyverse`) provides some functions to
+reshaping the data into a form you want.  The operative word here is
+_reshape_!
+
+Note: Package `tidyr` contains function `gather` which also does what
+I am going to describe below, but it is now deprecated as new improved
+functions have replaced it.
+
+___
+
+### Step 1
+
+The `tidyr::pivot_longer` function will take columns in a multiple
+columns and collapses into key-value pairs. It takes care to duplicate
+all other columns in the data set. This function is useful when we
+have have columns that are not variables. (That is certainly the case
+for us since the columns contain treatment information: `trt1` and
+`trt2`.)
+
+
+```{r}
+d %>%
+    pivot_longer(cols = c(sbp.trt1, dbp.trt1, sbp.trt2, dbp.trt2),
+                 names_to = "trt", values_to = "bp")
+```
+
+The above invocation asks `pivot_longer` to take the four blood pressure
+columns and convert them into key-value pairs. The key column will be
+named `trt` and the value column will be given the name `bp`.
+
+We can see this clearly by looking at the original data and after it
+has been gathered, side-by-side.
+
+```{r, echo = FALSE}
+img1 <-  rasterGrob(as.raster(readPNG("before_gather.png")), interpolate = FALSE)
+img2 <-  rasterGrob(as.raster(readPNG("after_gather.png")), interpolate = FALSE)
+grid.arrange(img1, img2, ncol = 2)
+```
+
+Notice how `pivot_longer` duplicated the `id` and `gender` columns to keep
+the data consistent. The order in which the values appear is dictated
+by the order of the arguments specified in the `pivot_longer` invocation
+above.
+
+___
+
+Instead of telling `pivot_longer` which columns to convert to
+key-value pairs, we can also tell it which columns _not to use_.
+
+Thus, the same effect above could be achieved via:
+
+```{r}
+d %>%
+    ## gather all columns but id and gender
+    pivot_longer(cols = -c(id, gender), names_to = "trt", values_to = "bp")    
+```
+
+Both forms are very useful.
+
+The `tidyverse` further provides selection facilities (via `tidyselect`
+package) for specifying columns using patterns for their names, such as
+  `starts_with`, `ends_with`, `one_of`, `contains`, `matches`,
+  etc. See `?tidyselect::select_helpers` and examples.
+
+Again, the same effect, via a different invocation.
+
+```{r}
+d %>%
+    ## gather all columns that contain the "bp"
+    pivot_longer(cols = tidyselect::contains("bp"), names_to = "trt", values_to = "bp")    
+```
+
+___ 
+
+What happens when the columns being gathered have different types?
+Let us see.
+
+```{r, error = TRUE}
+d %>%
+    pivot_longer(cols = -id , names_to = "trt", values_to = "bp")   
+```
+
+This is a difference from how `tidyr::gather` behaves:
+
+```{r}
+d %>% gather(key = key, value = value, -id)
+```
+
+So in `gather`, `key` is character, and `value` is coerced, promoted
+to a type that can encompass both types of value, which is character.
+
+This is usually not a good idea, but is sometimes is a quick-and-dirty
+trick for data cleaning.
+
+___
+
+### Step 2
+
+So we now have a column that has isolated the treatment. However,
+there is a problem. It has also combined the measurement `sbp`, `dbp`
+into the treatment column. So we need to separate it out.
+
+Enter the `tidyr::separate` function, which will separate a specified
+column into several columns.
+
+```{r}
+d %>%
+    pivot_longer(cols = tidyselect::contains("bp"), names_to = "trt", values_to = "bp") %>%    
+    separate(col = trt, into = c("bpType", "trt"))
+```
+
+Nice, except how did `separate` know to separate `sbp.trt1` into `sbp`
+and `trt1`? In other words, how did it know what to use as a
+separator?
+
+By default, `separate` uses all non-alphanumeric characters as
+separators and period is one of them. In case your data set has
+some other separater, that can be specified using the `sep` argument
+to `separate`.
+
+At this point, as you can verify, the data is in a tidy form. So let
+us save it after making sure we `rename` the `sbp` column
+
+```{r}
+d %>%
+    pivot_longer(cols = tidyselect::contains("bp"), names_to = "trt", values_to = "bp") %>%    
+    separate(col = trt, into = c("bpType", "trt")) ->
+    tidyD
+```
+
+___
+
+Instead of using `separate`, we can also do the entire thing in one
+fell swoop. 
+
+```{r}
+d %>%
+    pivot_longer(cols = tidyselect::contains("bp"),
+                 names_to = c("bpType", "trt"),
+                 values_to = "bp",
+                 names_pattern = "([a-z]+)\\.([a-z]+[1-2])")
+```
+
+This is often more efficient, at the slight cost of readability.
+
+## 8.1.2. Apropos Keys and Values
+
+The idea of organizing data using key-value pairs is fundamental and
+ubiquitous in programming and data science. In fact, one can go full
+monty and organize any data element this way. Databases that organize
+most of this data this way, are called [Entity-Attribute-Value
+(EAV)](https://en.wikipedia.org/wiki/Entity%E2%80%93attribute%E2%80%93value_model)
+databases.
+
+In such databases, the tables are very skinny, essentially three
+columns:
+- what is being measured (the entity)
+- what attribute of the entity is being measured (the attribute)
+- what value does that attribute have (the value)
+
+The advantage is that the organization is very general, flexible,
+efficient and sparse. However there are disadvantages as well.
+
+Since one essentially has a large duffel-bag where you can shove
+everything, retreiving an entity value involves a search and then
+possible type conversion everytime, which can be expensive and hard to
+manage. 
+
+So the functions in `tidyr` make it easy to produce such long skinny
+_tidy_ data that make summarizing operations easier.
+
+## 8.1.3. Summaries
+
+The tidiness makes it very easy to compute summaries etc.
+
+1. Mean systolic blood pressure for all patients
+
+```{r}
+library(dplyr)
+tidyD %>%
+    filter(bpType == "sbp") %>%
+    select(bp) %>%
+    summarize(meanSBP = mean(bp))
+```
+
+2. Mean systolic blood pressure by treatment
+
+```{r}
+tidyD %>%
+    group_by(trt) %>%
+    filter(bpType == "sbp") %>%
+    select(bp) %>%
+    summarize(meanSBP = mean(bp))
+```
+
+3. Mean blood pressure by treatment, by gender, by type
+
+```{r}
+tidyD %>%
+    group_by(trt, gender, bpType) %>%
+    select(bp) %>%
+    summarize(meanSBP = mean(bp))
+```
+
+## 8.1.4. Further Facilities
+
+The package `tidyr` provides functions such as 
+
+- `extract` which also turns each group into a new column, with
+  facilities for type conversion
+- `unite` which is the complement of `separate` which combines
+  multiple columns into 1, etc.
+  
+Use `library(help=tidyr)` to see all the exported functions and also
+to see vignettes.
+
+## 8.1.5. Discussion
+
+We saw how data transformation may be needed for analysis.
+
+- The series of transformations of a data set in order to produce an
+  analyzable version can be nicely visualized as a pipleline
+
+- The package `dplyr` provides some nice verbs to aid in the
+  transformations and analysis
+
+- The verbs in `dplyr` may be applied uniformly to data in R or
+  structures in R that are backed by remote data (i.e. data in
+  databases)
+  
+- Tidy data makes it easy to analyze data, especially using `dplyr`
+  verbs.  The package `tidyr` provides several functions to make this
+  possible. A really nice large example using
+  [WHO lung data](http://r4ds.had.co.nz/tidy-data.html#case-study) is
+  discussed in Wickham and Gorlemund's books _R for Data Science_. We
+  urge you to read it.
+
+- Tidy data works well with `ggplot` visualization tools. We shall see
+  this shortly. 
+
+By combining all these packages, one can tackle many of the
+data-related tasks and produce data that can be analyzed.
+
+## 8.1.6. Resources
+
+- [Case study of WHO lung
+  data](http://r4ds.had.co.nz/tidy-data.html#case-study)
+- Help pages for `tidyr`, `tidyselect` packages. 
+- Vignette for `pivot` in package `tidyr`. See also `pivot_wider`. 
+
+## 8.1.7. Session Info
+```{r}
+sessionInfo()
+```

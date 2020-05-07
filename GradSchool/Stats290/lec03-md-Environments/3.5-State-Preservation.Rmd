@@ -1,0 +1,167 @@
+---
+title: "3.5. Maintaining State"
+output:
+     slidy_presentation
+---
+
+We said: everything in R is an object.
+
+However, objects are supposed to maintain state. So it seems in R, the
+objects are not the usual kinds of objects at all!
+
+Actually, this is true of any functional language. Recall that a
+function call is not supposed to have side effects. So if you wanted
+to change the state of an object, that would be a side-effect!
+
+So object-oriented programming techniques have to be built using
+features of the language and surely R has such features.
+
+Before we talk about that, let us understand the `<<-` assignment
+operator.
+
+## 3.5.1. The `<<-` operator
+
+The `x <<-` assignment forces a search to made through parent
+environments for an existing definition for `x`.
+
+If `x` is found, its value is redefined. If not, it is given a value
+in the global environment.
+
+There are only some very special reasons to use this assignment in the
+examples below.
+
+
+## 3.5.2. OOP exploiting scoping
+
+We can put it all together to define an object system. For example,
+consider building an object to represent a person.
+
+The object will have fields to first name and last name.  How could we
+implement such an object in R?
+
+
+```{r}
+makePerson <- function(lastName = "", firstName = "") {
+
+    getLastName <- function() lastName
+
+    getFirstName <- function() firstName
+
+    setLastName <- function(what) lastName <<- what
+
+    setFirstName <- function(what) firstName <<- what
+
+    getFullName <- function() paste(lastName, firstName, sep = ", ")
+
+    list(getFullName = getFullName,
+         getFirstName = getFirstName,
+         getLastName = getLastName,
+         setFirstName = setFirstName,
+         setLastName = setLastName)
+}
+
+
+chawk = makePerson("Hawker","Maike")
+newname = makePerson()
+newname$getFirstName()
+newname$setFirstName("Rico")
+```
+
+So `makePerson` is a factory function, i.e. a function that produces
+products that are supposed to be objects representing persons.
+
+As you can see, the object is merely a list that has accessors and
+modifiers: functions that access or modify fields of the object. The
+fields here are `lastName` and `firstName`. The accessor functions are
+the `get` functions and the modifier functions are the `set`
+functions.
+
+Let us see how this would work by creating a person object.
+
+```{r}
+joeBlow <- makePerson(lastName = "Blow", firstName = "Joe")
+```
+
+Now let us access some fields. Since `joeBlow` is a named list, we can
+use the usual list syntax for accessing things.
+
+```{r}
+joeBlow$getFirstName()
+joeBlow$getLastName()
+```
+So far, so good.  But what really happened? Where did
+`joeBlow$getFirstName()` retrieve the `firstName` from? There seems to
+be no declaration of the fields in any formal way in the definition of
+`makePerson`.
+
+To understand that, we need to dig deeper.
+
+- What is in the environment of the `makePerson` function?
+```{r}
+environment(makePerson)
+ls(environment(makePerson))
+```
+Just stuff in the global environement.
+- What is in the environment of `joeBlow$getFirstName`?
+```{r}
+environment(joeBlow$getFirstName)
+ls(environment(joeBlow$getFirstName))
+```
+
+Aha! We see that `firstName` is in the environment of
+`joeBlow$etFirstName`. Also, in that of `joeBlow$setFirstName`.
+
+```{r}
+environment(joeBlow$setFirstName)
+ls(environment(joeBlow$getFirstName))
+```
+In fact all the elements of `joeBlow` have the same environment and so
+have access to all the stuff visible in that environment.
+
+Now let us change the last name.
+
+```{r}
+joeBlow$setLastName("Sixpack")
+joeBlow$getFullName()
+```
+We see that the last name indeed changed. Again, what really happened?
+
+The scoping rules, in the context of the `<<-` assignment dictate the
+following sequence.
+
+1. If `lastName` is a local variable to `joeBlow$setLastName`, it will
+   be set locally. But there is no local variable called `lastName` in
+   `joeBlow$setLastName`. So the search continues to the environment.
+
+2. `lastName` is indeed in the environment of `joeBlow$setLastName`
+   and therefore, it will be modified, in place!  (Note that this
+   modification only happens we used `<<-`. If we had used `<-`
+   instead of `<<-`, a variable called `lastName` would be created
+   local to the function `joeBlow$setLastName`, its value would be
+   set, and none of the other components of `joeBlow` would ever know
+   about it. Nor would we. It would be completely lost!)
+
+3. So now if we call `joeBlow$getFullName()`, that function looks for
+   `lastName` in constructing the full name. It is not a local
+   variable found in the function itself. So it looks for the value of
+   `lastName` in the environment, finds the new value which was set by
+   the call to `joeBlow$setLastName` and uses it.
+
+## 3.5.3. Summary
+
+These scoping rules are used in the object system called _Reference
+Classes_ in R. We'll have a chance to revisit them when we talk about
+OOP in R.
+
+
+## Session Info
+```{r}
+sessionInfo()
+```
+
+
+
+
+
+
+

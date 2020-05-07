@@ -1,0 +1,295 @@
+---
+title: 10.1. R Graphics
+output:
+     slidy_presentation
+---
+```{r, echo = FALSE, results = 'hide', message = FALSE}
+## Install a package if not already installed
+installIfNeeded <- function(packages, ...) {
+    toInstall <- packages[!(packages %in% installed.packages()[, 1])]
+    if (length(toInstall) > 0) {
+        install.packages(toInstall, repos = "https://cloud.r-project.org")
+    }
+}
+
+## Ensure packages exist and activate them
+needPackages <- function(packages) {
+    installIfNeeded(packages)
+    for (x in packages) {
+        library(x, character.only = TRUE)
+    }
+}
+needPackages(c("tidyverse", "png"))
+```
+
+
+The S/R system was designed with publication quality graphics from the
+start. However, over time, new packages and facilities have been added
+to enhance the system.
+
+## 10.1.1. Graphics Structure
+
+```{r, echo = FALSE}
+library(grid)
+img <- readPNG("gorg.png")
+grid.raster(img)
+```
+[_Source_: R Graphics by Paul Murrell.]
+
+
+## 10.1.2. Base Graphics
+
+To see what base graphics can do, try `demo(graphics)`.
+
+Common functions are:
+
+- `plot`, `lines`, `points` for common
+    $x-y$ plots, adding lines, points
+- `axes` for drawing axes, `box` for rectangular box
+- `text`,  `mtext` for placement of text
+- `pairs` for scatterplot matrices, `coplot` for
+    conditioning plots
+- Some interactivity: `identify`, `locator`
+- Higher level plots: `rug`,
+    `dotchart`, `hist`, `barplot`,
+    `boxplot`, `qqplot`, `qqnorm`, `image`
+
+
+As we already saw, many R objects have default plotting methods.
+Every aspect of plotting can be controlled.
+
+## 10.1.3. Graphics Devices
+
+The graphics packages use low-level device software (in the `grDevices`
+  package).
+
+Eventual output is via screen software or document format.
+
+Default device plots to the screen using standard system graphics: `quartz`
+  on Mac, `x11` in Linux.
+
+Many graphics devices are available and you can create devices that
+write to a file (e.g., `pdf` for pdf output, `png` for png, `jpeg` for
+jpeg, etc.).
+
+To save a graphic that you have created, say in a `pdf` format, you
+use the corresponding graphic device, thus.
+
+```{r, eval = FALSE}
+pdf(file = "plot.pdf")
+plot(x = 1:10, y = 1:10)
+dev.off()
+```
+ 
+## 10.1.4. Graphics parameters
+
+The `par` can be used to set graphics parameters, the most complicated
+function in R by some measure.
+
+Things you can control.
+
+- Layout, size, fonts
+- Plot symbols, fill, line types
+- Labels, annotations, text placement
+- Axes, tickmarks
+- Interactivity (`ask`)
+- Colors
+- Transparency (alpha blending) on some devices
+- Support for plotting math symbols (`plotmath`
+
+Grid equivalents are specified via `gpar`.
+
+## 10.1.5. Example
+
+Many objects in R have a default plotting method. What does that mean? 
+
+It means that you can pass that object to the `plot` function and the
+appropriate plot will be generated. Consider the following dataset.
+
+```{r}
+library(graphics)
+data(pressure)
+class(pressure)
+```
+
+Let's plot it.
+
+```{r}
+plot(pressure)
+```
+Note how the plot function _knew_ what to do with the data frame
+`pressure`. Let's examine how this actually happens.
+
+___
+
+```{r}
+plot
+```
+shows that `plot` is a function in the `graphics` package. 
+
+A _generic function_ is one that behaves differently depending on the
+class of its arguments. 
+
+Contrast with standard OOP where objects have methods and so a
+similarly named method `foo.plot()` and `bar.plot()` can potentially
+generate different types of plots for objects `foo` and `bar`.
+
+A generic function is a functional way of achieving the same effect:
+`plot.foo` and `plot.bar` are functions that can be called if `foo` or
+`bar` are (respectively) passed to the `plot` function. 
+
+Let's see what else `graphics` provides for plotting.
+
+```{r}
+str(pressure)
+class(pressure)
+```
+
+```{r}
+ls(as.environment("package:graphics"), pattern = "^plot")
+```
+
+Hmmm, we don't see a `plot.data.frame` which is what we were expecting
+to see.  But such functions may yet be there and not visible for
+general use.
+
+One way to find such functions is by looking at the _methods_ for a
+generic function. These methods are the functions that actually do the
+real work.
+
+```{r}
+methods(plot, data.frame)
+```
+
+Notice that `plot.data.frame` is not visible, i.e. exported. However,
+we can still examine it using triple colon access:
+
+```{r}
+graphics:::plot.data.frame
+```
+
+__NOTE__ You will never use the triple colon functions in normal
+scripts and packages because those are not exported for a reason. In
+other words, you will only use the documented behaviors of a package
+to ensure your code always works!
+
+So `plot(pressure)`, since it is generic, did the following:
+
+- Determined the class of `pressure` and invoked the _method_ plot for
+data.frame `graphics:::plot.data.frame(pressure)` since `pressure` is a data
+frame
+- `graphics:::plot.data.frame` found that `pressure` had exactly 2
+  elements and therefore called the _internal_ `plot2` function, which
+  invoked `plot` one more time.
+- The latter invocation tried to see if there was a method for
+  `plot(x, y)`  where `x` and `y` are numeric since
+  `class(pressure[[1]])` is `numeric`. Finding no such method, it
+  invoked `plot.default(pressure[[1]], pressure[[2]])`
+
+
+## 10.1.6. Plot layouts
+
+You can control how plots are laid out on a rectangular grid. For
+example, for two side-by-side plots:
+
+```{r}
+opar <- par(mfrow=c(1,2)) ## 1 row, 2 cols
+plot(1:10)
+plot(11:20)
+par(opar)
+```
+
+__Warning__ `par()` is one of the most complicated functions in base
+plotting. It has so many (interdependent) options that you will have
+to examine it in detail to get the effect you desire. Since it
+controls _global_ plotting options, it has side effects.
+
+Also note the general style of programming above that changes plotting
+parameters and retains the old settings in `opar` that you can
+restore, thereby avoiding unintended consequences for subsequent
+plots.
+
+
+## 10.1.7. Building up plots
+
+Every part of plotting can be controlled. So you can build up plots
+step by step.
+
+```{r, echo = FALSE}
+library(grid)
+img <- readPNG("xy.png")
+grid.raster(img)
+```
+
+
+[_Source_: R Graphics by Paul Murrell.]
+
+- Create an empty plot: `plot.new()`
+- Set up the coordinate system:
+`plot.window(range(pressure$temperature), range(pressure$pressure))`
+- Plot the xy points: `plot.xy(pressure, type="p")`
+- Add lines to join the points also
+- Draw a box around it: `box()`
+- Now the axes, horizontal, vertical and top: `axis(1);axis(2); axis(3)`
+- Add the title: `title(xlab=names(pressure)[1], ylab=names(pressure)[2])`
+```
+
+Put it all together:
+
+```{r}
+plot.new()
+plot.window(range(pressure$temperature), range(pressure$pressure))
+plot.xy(pressure, type = "p")
+lines(pressure)
+box()
+axis(1); axis(2); axis(3)
+title(xlab = names(pressure)[1], ylab = names(pressure)[2])
+```
+
+Compare with the above `plot(pressure)`.
+
+---
+
+## 10.1.8. Exporting plots
+
+```{r}
+pdf(file = "plot.pdf", width = 5, height = 3)
+plot.new()
+plot.window(range(pressure$temperature), range(pressure$pressure))
+plot.xy(pressure, type = "p")
+lines(pressure)
+box()
+axis(1); axis(2); axis(3)
+title(xlab = names(pressure)[1], ylab = names(pressure)[2])
+dev.off()
+```
+
+---
+
+## 10.1.9. What to use?
+
+- Base graphics is very capable, but has aged a bit. Cannot completely
+  avoid it since it is used in many packages via `plot` methods.
+
+- The `grid` by Paul Murrell provides a different graphics engine that
+  can take the place of base graphics. It is clear that this is the
+  modern way to go since you can deal with objects and manipulate
+  various phases of the plotting process. However, this is _too
+  low-level_ for users.
+
+- The `lattice` by Deepayan Sarkar, implements some of the ideas of
+  Bill Cleveland's Trellis graphics in R. Uses the `grid` package to
+  render the plots. If you are very familiar with base graphics, it
+  might be easier to find lattice plot equivalents.
+
+- The `ggplot2` is recommended and widely popular. It is also based on
+  `grid` (so good!). However, because it can take a while to really
+  master it.
+
+---
+
+## 10.1.10. Session Info
+
+```{r}
+sessionInfo()
+```

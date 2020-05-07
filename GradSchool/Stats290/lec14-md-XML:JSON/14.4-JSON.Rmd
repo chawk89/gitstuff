@@ -1,0 +1,369 @@
+---
+title: 14.4. JSON
+output:
+     slidy_presentation
+---
+
+```{r, echo = FALSE, message = FALSE}
+## Install a package if not already installed
+installIfNeeded <- function(packages, ...) {
+    toInstall <- packages[!(packages %in% installed.packages()[, 1])]
+    if (length(toInstall) > 0) {
+        install.packages(toInstall, repos = "https://cloud.r-project.org")
+    }
+}
+
+## Ensure packages exist and activate them
+needPackages <- function(packages) {
+    installIfNeeded(packages)
+    for (x in packages) {
+        library(x, character.only = TRUE)
+    }
+}
+needPackages(c("jsonlite"))
+```
+
+JavaScript Object Notation (JSON) is a text-based serialization format
+for data. JSON has its limitations, but is widely used in web
+technologies.
+
+JSON specifies 4 primitive types: `string`, `number`, `boolean`,
+`null`. It also specifies two complex types:
+
+- A JSON object: an unordered collection of zero or more name-value
+pairs, where a name is a string and a value is a `string`, `number`,
+`boolean`, `null`, anothe JSON object or `array`. This is enclosed
+within curly braces `{}`
+
+- A JSON array: an ordered sequence of zero or more values. This is
+  enclosed within square brackets `[]`.
+
+Both these structures are heterogeneous; i.e. they are allowed to
+contain elements of different types. Therefore, the natural R
+equivalent of a JSON object is a _named list_ and that for a JSON
+array is an _unnamed list_.
+
+___
+
+There are at least three packages for handling JSON in R: `rjson`
+`RJSONIO` and `jsonlite`.
+
+But I advocate the use of `jsonlite` for several reasons:
+
+- While the serialization to and from JSON in each package is
+ consistent, the JSON serialization can cause problems with web
+ applications where depending on results, one can get different types
+ of R structures (list vs. vectors) etc.
+
+- `jsonlite` pays more attention to serialization to and from R to
+other non-R applications
+
+___
+
+The material and examples below are from a paper by [Jeroen
+Ooms](http://arxiv.org/abs/1403.2805).
+
+The package `jsonlite` implements two forms of serialization between R
+objects and JSON.
+
+- The functions `toJSON` and `fromJSON` use a class-based method
+  dispatch and objects get encoded depending on their class. Thus
+  classes that do not have a `toJSON` method defined will not be
+  encoded.
+- The functions `serializeJSON` and `unserializeJSON` implement a pure
+  type-based encoding. This pretty much tries to encode the R `SEXP`
+  expression so that it can be accurately restored. The idea is that
+  this can expose R objects to other systems
+
+gMostly, you will be using the functions `toJSON` and `fromJSON`.
+
+
+## 14.4.1. Coverting atomic vectors
+
+```{r}
+library(jsonlite)
+x <- 1:3
+toJSON(x)
+identical(fromJSON(toJSON(x)), x)
+y <- seq(from = 1.0, to = 2.0, by = .5)
+toJSON(y)
+```
+We have to note how the textual representation works.
+
+```{r}
+z <- 1:3 * pi
+toJSON(z)
+toJSON(z, digits = 16)
+```
+So an R vector gets encoded into a JSON array, even though a JSON
+array can be heterogeneous.
+
+How about missing values?
+
+```{r}
+x <- c(TRUE, FALSE, NA)
+toJSON(x)
+```
+
+___
+
+Recall that besides regular values, each vector type in R except for
+raw can hold `NA` as a value. Vectors of type double and complex
+define three additional types of non finite values: `NaN`, `Inf` and
+`-Inf`. The JSON format does not natively support any of these types;
+therefore such values values need to be encoded in some other
+way.
+
+- Missing values in non-numeric vectors (logical, character) are encoded as null.
+- Missing values in numeric vectors (double, integer, complex) are
+  encoded as strings.
+
+```{r}
+toJSON(c(TRUE, NA, NA, FALSE))
+toJSON(c("FOO", "BAR", NA, "NA"))
+toJSON(c(3.14, NA, NaN, 21, Inf, -Inf))
+```
+You can ask for non-default behavior:
+
+```{r}
+toJSON(c(3.14, NA, NaN, 21, Inf, -Inf), na = "null")
+```
+
+___
+
+JSON also lacks native support for some of the basic vector types in R
+that frequently appear in data sets. These include vectors of class
+`Date`, `POSIXt` (timestamps), factors and complex vectors. These are
+all coerced to strings.
+
+```{r}
+toJSON(Sys.time() + 1:3)
+toJSON(as.Date(Sys.time()) + 1:3)
+toJSON(factor(c("foo", "bar", "foo")))
+toJSON(complex(real = runif(3), imaginary = rnorm(3)))
+```
+
+Vectors of length 0 or 1 are encoded differently.
+```{r}
+toJSON(vector())
+toJSON(pi)
+toJSON(list(foo = vector()))
+toJSON(list(foo = pi))
+toJSON(list(vector()))
+toJSON(list(pi))
+```
+
+## 14.4.2. Matrices
+
+Recall that in R a matrix is stored in memory as a vector with a `dim`
+attribute defining its dimensions. Although R stores matrix in _column
+major_ order, the JSON output is in _row major_ order.  Note also that
+missing values are treated as stated before, consistently.
+
+```{r}
+x <- matrix(c(1, 2, NA, 4, 5, 6), nrow = 2)
+toJSON(x)
+```
+
+Attributes such as `dimnames` are ignored as they are very R
+specific.
+
+## 14.4.3. Lists
+
+The list is the most general purpose data structure in R. It holds an
+ordered set of elements, including other lists, each of arbitrary type
+and size.
+
+```{r}
+toJSON(list(c(1, 2), "test", TRUE, list(c(1, 2))))
+toJSON(list(c(1, 2, NA), "test", FALSE, list(foo = "bar")))
+```
+
+Named lists are those that have an attribute called `names`. Remember
+that some _names_ of list elements could be empty!
+
+```{r}
+toJSON(list(123, bar = 'foobar'))
+toJSON(list(foo = 123, "test", TRUE))
+```
+
+The function `toJSON` has an argument `auto_unbox` that is `FALSE` by
+default. 
+
+```{r}
+toJSON(list(PI = pi))
+```
+
+versus
+
+```{r}
+toJSON(list(PI = pi), auto_unbox = TRUE)
+toJSON(list(empty = vector()), auto_unbox = TRUE)
+```
+
+
+## 14.4.4. Data Frames
+
+Data frames are implemented in R as lists and so you might be tempted
+to think that the above rules are merely repeated here. Not so;
+`jsonlite` does something very different, in keeping with
+implementations outside the R community. It uses row-based encoding to
+map data frame to a default array of records.
+
+```{r}
+toJSON(iris[1:2, ], pretty = TRUE)
+```
+Although these look like a list of named lists, the individual records
+contain JSON primitives. Compare with named lists.
+
+```{r}
+toJSON(list(list(Species = "Foo", Width = 21)), pretty = TRUE)
+```
+
+Missing values are also handled in a different way.
+
+```{r}
+x <- data.frame(foo = 1:3, bar = c(TRUE, FALSE, NA))
+print(x)
+toJSON(x, pretty = TRUE)
+```
+
+## 14.4.5. Nested Records
+
+Nested records are common in JSON, where data often comes from a
+relational model. For example, consider the following JSON.
+
+```{r}
+options(stringsAsFactors=FALSE)
+x <- data.frame(driver = c("Bowser", "Peach"),
+                occupation = c("Koopa", "Princess"))
+x$vehicle <- data.frame(model = c("Piranha Prowler", "Royal Racer"))
+x$vehicle$stats <- data.frame(speed = c(55, 34),
+                              weight = c(67, 24),
+                              drift = c(35, 32))
+str(x)
+```
+
+If we convert this to JSON, we get:
+
+```{r}
+cat(toJSON(x, pretty = TRUE))
+```
+
+___
+
+This kind of data is often produced as a result of a database query
+where the _subrecord_ is a foreign key pointing to a record in an
+external table. That is, `vehicle` field points to a table of
+vehicles, and that in turn points to a table of vehicle statistics.
+
+When the relationship is such that there is no more than one subrecord
+for each record, the structure can be _flattened_ into a single
+non-nested data frame that might be more convenient to handle. In
+other words, you would like a result such as this:
+
+```{r}
+cbind(x[c("driver", "occupation")], x$vehicle["model"], x$vehicle$stats)
+```
+
+This can be achieved by _flatten_ing the JSON:
+
+```{r}
+d <- fromJSON(toJSON(x), flatten = TRUE)
+str(d)
+```
+
+___
+
+Let us also examine what happens if Bowser happens to be a young
+student in Manhattan (not being able to afford a car and all the
+hassles associated with that). 
+
+```{r}
+str(fromJSON('[
+  {
+    "driver": "Bowser",
+    "occupation": "Student"
+  },
+  {
+    "driver": "Peach",
+    "occupation": "Princess",
+    "vehicle": {
+      "model": "Royal Racer",
+      "stats": {
+        "speed": 34,
+        "weight": 24,
+        "drift": 32
+      }
+    }
+  }
+]
+'))
+```
+
+Nice, `vehicle` is `NA` for Bowser but the variable itself is still a
+nested data frame, as is `stats`.
+
+___
+
+_But_ this flattened view is not possible when Bowser moves to
+suburbia (one-to-many relationship).
+
+```{r}
+d <- fromJSON('[
+  {
+    "driver": "Bowser",
+    "occupation": "Family man",
+    "vehicles": [
+      "Piranha Prowler",
+      "Aging Tourer"
+    ]
+  },
+  {
+    "driver": "Peach",
+    "occupation": "Princess",
+    "vehicles": [
+      "Royal Racer"
+    ]
+  }
+]')
+str(d)
+```
+
+So in R the only reasonable way to handle this is to make it into a
+list which is what `jsonlite` does.
+
+
+## 14.4.6. Usage
+
+There are a number of nice examples of handling JSON from the
+`jsonlite` package. See [Fetching JSON from REST
+APIs](https://cran.r-project.org/web/packages/jsonlite/vignettes/json-apis.html)
+for example.
+
+There are many others. 
+
+## 14.4.7. Practical Problems
+
+There is no avoiding the fact that you need to know the structure of
+the JSON data for programmatic processing. While you can detect This
+can be very messy and therfore, we humans, need some help. 
+
+In the past, I have found JSON viewers helpful, for example the
+website [http://jsonviewer.stack.hu/](http://jsonviewer.stack.hu/).
+
+But now, browsers themselves provide this ability, especially Chrome
+and Firefox. 
+
+
+## 14.4.8. Further reading
+
+- I highly recommend [Jeroen Ooms
+  paper](http://arxiv.org/abs/1403.2805)
+- Also the vignettes in the R package `jsonlite`.
+
+
+## 14.4.9. Session Info
+```{r}
+sessionInfo()
+```

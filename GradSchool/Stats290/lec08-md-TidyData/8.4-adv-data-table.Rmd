@@ -1,0 +1,275 @@
+---
+title: "8.4. Advanced Data Table"
+output:
+     slidy_presentation
+---
+
+```{r requirements, echo = FALSE, message = FALSE}
+## Install a package if not already installed
+installIfNeeded <- function(packages, ...) {
+    toInstall <- packages[!(packages %in% installed.packages()[, 1])]
+    if (length(toInstall) > 0) {
+        install.packages(toInstall, repos = "https://cloud.r-project.org")
+    }
+}
+
+## Ensure packages exist and activate them
+needPackages <- function(packages) {
+    installIfNeeded(packages)
+    for (x in packages) {
+        library(x, character.only = TRUE)
+    }
+}
+needPackages(c("tidyverse", "data.table"))
+set.seed(12334)
+```
+
+Recall the basic syntax behind `data.table` indexing and subsetting:
+
+Data table operations can be thought to have three components: `i`,
+`j`, `by` corresponding to `where`, `select` and `group by` in SQL.
+
+
+-------     ------ ----------   ---------
+    R         i        j          by
+  SQL       where    select     group by
+
+
+So `DT[i, j, by]` means: take `DT`, subset rows using `i`, then
+calculate `j` grouped by `by`.
+
+___
+
+## 8.4.1. Joins
+
+You can perform joins with data tables.  This is a fairly extensive
+topic and it is best understood by examples. I am going to present one
+here, but I provide several resources below for further information.
+
+```{r}
+(X <- data.table(x = c(1, 1, 1, 2, 2, 5, 6), y = 1:7, key = "x"))
+(Y <- data.table(x = c(2, 6), z = letters[2:1], key = "x"))
+```
+
+The syntax
+
+- `X[Y]` looks up rows of `Y` using the keys of `X`
+- `Y[X]` looks up rows of `X` using the keys of `Y`.
+
+
+So `X[Y]` is a `left_join` between data table `Y` and data table `X`
+on the key columns. The key column of X is matched to the key column
+of Y.  An equi-join is performed by default, meaning that the values
+must be equal.
+
+
+```{r}
+X[Y]
+```
+
+
+```{r}
+Y[X]
+```
+
+```{r}
+Y[X, nomatch = 0]
+```
+
+Watch out for how matches are done.
+
+```{r}
+(X2 <- data.table(x = c(1, 1, 1, 2, 2, 5, 6), y = 1:7, key = c("x", "y")))
+(Y2 <- data.table(x = c(2, 6, 7), y = c(1, 8, 9), z = letters[3:1], key = c("x", "y") ))
+```
+
+```{r}
+X2[Y2]
+```
+
+```{r}
+Y2[X2]
+```
+___
+
+Comparison with `dplyr` is useful.
+
+```{r}
+df1 <- tibble(x = c(1, 2), y = 2:1)
+df2 <- tibble(x = c(1, 3, 5), a = 10, b = "a")
+dt1 <- data.table(df1)
+dt2 <- data.table(df2)
+
+df1 %>%
+    left_join(df2)
+
+dt2[dt1, on = "x"]
+```
+
+```{r}
+df2 %>%
+    left_join(df1)
+
+dt1[dt2, on = "x"]
+```
+
+
+
+## 8.4.1 Rolling Joins
+
+One can perform _rolling joins_ instead of equi_joins by using `roll =
+TRUE`. As before the first column of `Y` is matched to `X` where the
+values are equal. The last join column in `Y` (the 2nd one here) is
+handled in a special way. If no match is found, then the row before is
+returned, provided the first column still matches.  Further options
+can control the rolls either forward, backward, nearest etc.
+
+___
+
+## 8.4.3. An Example
+
+The following is common setting in the Bone Marrow transplant database
+at Stanford. Patients have their bone marrows transplanted and make
+periodic visits back to clinic to have their immune systems checked or
+for other reasons, such as adverse events. At each visit, absolute
+neutrophil counts (`ancCount`) are measured; these are indicators of
+how well the immune system is doing. (A normal range is 1.5 to
+8). Ideally, the 30, 60, 90, 180 and 365 day values are important to
+doctors: they suggest interventions that might be needed.
+
+(I'm simplifying the actual data for illustration.) We have a
+`patientTable` that has patient ids and the transplant dates.
+
+```{r}
+patientTable <- data.table(id = c("P1", "P2"),
+                           txDate = as.Date(c("2014-01-02", "2014-01-12")))
+patientTable
+```
+
+We also have another table that contains the actual visits of
+patients along with the `ancCount`.
+
+```{r}
+visitTable <- data.table(
+    id = c(rep("P1", 3), rep("P2", 4)),
+    visitDate = as.Date(c("2014-01-31",
+                          "2014-03-15",
+                          "2014-10-12",
+                          "2014-02-05",
+                          "2014-03-31",
+                          "2014-06-29",
+                          "2014-12-21")),
+    ancCount = c(1.2, 1.3, 2.0, 2.1, 1.0,
+                 1.2, 1.0))
+visitTable
+```
+
+Note that patient 1 has three visits, while patient 2 has four
+visits. Also, the visits are not necessarily at "nice" intervals of
+30, 60, 90 days etc. What we would like is to carry the last (nearest)
+observation forward for the 30, 60, 90-day values for `ancCount`.  In
+other words,
+
+We want the 30, 60, 90, 180 and 365 day neutorphil count (`ancCount`)
+to be:
+
+```
+id day anc
+P1  30 1.2
+P1  60 1.2
+P1  90 1.3
+P1 180 1.3
+P1 365 2.0
+P2  30 2.1
+P2  60 2.1
+P2  90 1.0
+P2 180 1.2
+P2 365 1.0
+```
+
+
+How to do this? One way is to use the rolling join of `data.table`
+after setting some keys.
+
+```{r}
+setkey(visitTable, id, visitDate)
+setkey(patientTable, id, txDate)
+checkpoints <- lapply(patientTable$txDate, function(x) x + c(30, 60, 90, 180, 365))
+d <- data.table(id = c(rep("P1", 5), rep("P2", 5)),
+                checkpt = c(checkpoints[[1]], checkpoints[[2]]))
+setkey(d, id, checkpt)
+d
+```
+
+Now, we can generate the values for the time points.
+
+```{r}
+visitTable[d, roll=TRUE]
+```
+
+(In fact, this is how we create analysis datasets for the Bone Marrow
+Transplant program.)
+
+___
+
+## 8.4.4. Miscellaneous
+
+There are number of special variables such as `.SD` and `.SDcols` that
+can be exploited for computations. Briefly, `.SD` stands for _subset
+of data_ and is the subset obtained by some grouping operation.  You
+can exploit that fact with the `.(` construct in `j` to do arbitrary
+things.  Note that `.N` in the context of grouping refers to the
+number of rows in the subset.
+
+Some examples:
+
+Picking out the first or last row of each group formed by some grouping
+operation.
+
+```{r}
+DT <- data.table(A = c(rep('a', 3), rep('b', 2), rep("c", 5)), B = 1:10)
+DT[, , by=A]
+DT[, .SD[1], by=A]
+DT[, .SD[.N], by=A]
+DT[, .SD[c(1, .N)], by = A]
+```
+
+___
+
+### 8.4.5. Exploring what is going on
+
+Sometimes when you subset it may not be obvious what is going on. You
+can exploit the fact that the `j` index is evaluated and throw in an
+arbitrary expression to print the intermediate results. This will help
+you figure out what is happening.
+
+```{r}
+DT
+DT[, { print(.SD); .SD[1] }, by=A]
+```
+
+By including the `i` index, you can perform grouping only for specified
+groups.
+
+```{r}
+DT[, C := B + 1]
+DT[A %in% c("c", "a"), .(mean(B), mean(C)), by = A]
+```
+
+___
+
+## 8.4.6. References
+
+- The help pages in `data.table` package, especially help on `J` (for
+join)
+- The vignettes in `data.table`
+- Questions regarding `data.table` on Stackoverflow
+- An easy to understand [example](https://rstudio-pubs-static.s3.amazonaws.com/52230_5ae0d25125b544caab32f75f0360e775.html)
+
+___
+
+## 8.4.7. Session Info
+```{r}
+sessionInfo()
+```
+
