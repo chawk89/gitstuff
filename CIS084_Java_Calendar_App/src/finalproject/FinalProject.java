@@ -1,5 +1,5 @@
 /*
- Part 1: Basic requirements (5 points):
+ Part 1: Basic requirements:
 
 	•	The program shall allow the user to select from the following options:
 	•	Create a new meeting
@@ -21,10 +21,10 @@
 
 Technical requirements:
 
-	•	You must have at least one array
-	•	Assume the user will enter data correctly with valid start and end times
+	•	Catch user format errors
+	•	Assume the user will enter times
 
-Part 2: Additional requirements: (5 more points)
+Additional requirements:
 
 	•	Each meeting now also has a priority of either critical or non-critical. This makes all meetings having a subject, priority, day of the week, start and end time
 
@@ -32,7 +32,7 @@ Additional technical requirement:
 
 	•	You must create a “Meeting” class with the appropriate properties (you should have at least 5) that are private and at least have a constructor and the corresponding set/get methods 
 
-Part 3: Enhanced requirements (5 more points)
+Enhanced requirements 
 
 	•	Each meeting now also has a numeric ID automatically assigned with each new meeting scheduled. Each meeting ID instance must be I different number
 	•	Allow the user to delete individual meetings from the calendar. When the user wants to do this, the program asks the user for the ID of the meeting. If the meeting is found from the ID, the program shows the meeting to the user and first asks, “Are you sure you want to remove this?” The meeting is removed if the user confirms deleting it
@@ -43,7 +43,7 @@ Additional technical requirement:
 
 	•	Assume the user will still enter data formatted correctly but may enter times out of range such as “2500” or “1175”. Use try…catch exception handling to capture these time out of range exceptions
 
-Part 4: Advanced requirements (3 points each)
+Advanced requirements:
 
 	•	Allow for multiple weeks denoted by week number from 1 to 50. Each week has its own set of 7 days and meetings within them. Meetings can span from week to week (for example, a meeting can start on week 2, day 6 at 1800 and end on week 3, day 1 at 1200)
 	•	Allow the user to save and load meeting data
