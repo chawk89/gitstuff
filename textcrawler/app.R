@@ -144,7 +144,7 @@ server <- function(input, output) {
       imported_document <-  read_docx(input$file1$datapath) 
       
       if (is.null(imported_document) == TRUE){
-        document <- "hello my name is Colby and I like to boogy and jive like this polar bear. I'm just saying hello right now. That's pretty much all. Today was OK."
+        document <- "hello this is just a demonstration. Change the line text here or import a file."
       } else{
         document <- as.character(imported_document)
       }
