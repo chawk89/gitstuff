@@ -15,6 +15,9 @@ library(wordcloud)
 library(textreadr)
 library(RColorBrewer)
 
+## add document text here
+document_entry = "Add document text here. The processor will parse the text."
+
 # Define UI for application that draws a histogram
 # Define UI for data upload app ----
 ui <- fluidPage(
@@ -83,7 +86,7 @@ server <- function(input, output) {
        imported_document <-  read_docx(input$file1$datapath) 
        
         if (is.null(imported_document) == TRUE){
-        document <- "hello my name is Colby and I like to boogy and jive like this polar bear. I'm just saying hello right now. That's pretty much all. Today was OK."
+        document <- document_entry
         } else{
             document <- as.character(imported_document)
         }
